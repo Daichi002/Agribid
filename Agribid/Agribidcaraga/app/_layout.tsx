@@ -1,7 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native'
 import { SplashScreen , Stack } from 'expo-router'
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
+declare module 'laravel-echo';
 
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -42,9 +42,13 @@ const Rootlayout = () => {
     <Stack.Screen name="index" options={{ headerShown:false}}/>
     <Stack.Screen name="(auth)/login" options={{ headerShown:false}}/>
     <Stack.Screen name="(auth)/signup" options={{ headerShown:false}}/>
-    <Stack.Screen name="(tabs)" options={{ headerShown:false}}/>
-    <Stack.Screen name="createsell" options={{ headerShown:false}} />
-    <Stack.Screen name="ProductDetails" options={{ headerShown:false}} />
+    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="createsell" options={{ headerShown:false}} />  
+    <Stack.Screen name="ProductDetails" options={{ headerShown: false }}/>
+    <Stack.Screen name="profile" options={{ headerShown:false}}/>
+    <Stack.Screen name="messagesender" options={{ headerShown:false}}/>
+    <Stack.Screen name="messagereceiver" options={{ headerShown:false}}/>
+    <Stack.Screen name="messagelist" options={{ headerShown:false}}/>
   </Stack>
   )
 }

@@ -6,7 +6,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    
+    "scripts": {
+      "prebuild": "npx react-native link @pusher/pusher-websocket-react-native"
+    },
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -20,8 +22,15 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff",
-        "package": "com.agribid"
-      }
+        "package": "com.agribid",
+        "jsEngine": "jsc",
+        "permissions": [],
+        "useCleartextTraffic": true,
+        "scripts": {
+          "prebuild": "npx react-native link @pusher/pusher-websocket-react-native"
+        }
+      },
+      "package": "com.agribid.app"
     },
     "web": {
       "bundler": "metro",

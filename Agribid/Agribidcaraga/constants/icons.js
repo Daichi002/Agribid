@@ -13,6 +13,14 @@ import eye from "../assets/icons/eye.png";
 import play from "../assets/icons/play.png";
 import Agribid from "../assets/icons/Agribid.png";
 import slider from "../assets/icons/slider.png";
+import Agribidlogo from "../assets/icons/Agribid.jpg";
+import send from "../assets/icons/send.png";
+import Delete1 from "../assets/icons/Delete 1.png";
+import garbage from "../assets/icons/garbage.png";
+import recents from "../assets/icons/recents.png";
+import contact from "../assets/icons/contact.png";
+import create1 from "../assets/icons/create1.png";
+import create2 from "../assets/icons/create2.png";
 
 export default {
   play,
@@ -29,5 +37,13 @@ export default {
   eyeHide,
   eye,
   Agribid,
-  slider
+  slider,
+  Agribidlogo,
+  send,
+  Delete1,
+  garbage,
+  recents,
+  contact,
+  create1,
+  create2
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle, TextStyle } from 'react-native';
 
 // Define the types for the props
@@ -6,8 +6,10 @@ interface CustomButtonProps {
   title: string;
   handlePress: () => void; // Function with no arguments and no return value
   containerStyles?: StyleProp<ViewStyle>; // Optional container styles
+  otherStyles?: StyleProp<ViewStyle>;
   textStyles?: StyleProp<TextStyle>; // Optional text styles
   isLoading: boolean; // Indicates if the button is in loading state
+  setIsLoading: (loading: boolean) => void; // Function to update the loading state
 }
 
 const CustomButton: React.FC<CustomButtonProps> = ({
@@ -16,7 +18,18 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   containerStyles,
   textStyles,
   isLoading,
+  setIsLoading,
 }) => {
+  useEffect(() => {
+    let timer: string | number | NodeJS.Timeout | undefined;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setIsLoading(false); // Stop loading after 15 seconds
+      }, 15000);
+    }
+    return () => clearTimeout(timer); // Cleanup the timer on component unmount
+  }, [isLoading, setIsLoading]);
+
   return (
     <TouchableOpacity
       onPress={handlePress}
@@ -26,7 +39,7 @@ const CustomButton: React.FC<CustomButtonProps> = ({
         containerStyles,
         isLoading && { opacity: 0.5 }, // Apply opacity when loading
       ]}
-      disabled={isLoading}
+      disabled={isLoading} // Disable button while loading
     >
       <Text style={[styles.text, textStyles]}>
         {title}
