@@ -1,6 +1,6 @@
-import { StatusBar } from "expo-status-bar";
-import { Redirect, Tabs, Link } from "expo-router";
-import { SafeAreaView, Image, Text, View, Pressable, StyleSheet, useWindowDimensions,ImageSourcePropType } from "react-native";
+import { StatusBar, TouchableOpacity } from "react-native";
+import { Redirect, Tabs, Link, router } from "expo-router";
+import { SafeAreaView, Image, Text, View, StyleSheet, useWindowDimensions,ImageSourcePropType } from "react-native";
 import { icons } from "../../constants";
 
 // Define a type for your icons (assuming they're ImageSourcePropType)
@@ -52,14 +52,14 @@ const TabIcon: React.FC<IconProps> = ({ icon, name, focused }) => {
 const TabLayout = () => {
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Link href="/sell" style={styles.logoContainer}>
           <Image source={icons.Agribid} style={styles.logo} resizeMode="contain" />
         </Link>
         <Link href="/profile">
           <Image source={icons.Profile} style={styles.profileImage} resizeMode="contain" />
         </Link>
-      </View>
+      </View> */}
 
       <Tabs
         screenOptions={{
@@ -84,34 +84,53 @@ const TabLayout = () => {
             title: "SeLL",
             headerShown: false,
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon={icons.home} name="Sell" focused={focused} />
+              <TabIcon icon={icons.home} name="" focused={focused} />
             ),
           }}
         />
-        <Tabs.Screen
+
+      <Tabs.Screen
           name="srp"
           options={{
             title: "Srp",
             headerShown: false,
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon={icons.bookmark} name="Srp" focused={focused} />
+              <TabIcon icon={icons.srp} name="" focused={focused} />
             ),
           }}
         />
-
-        <Tabs.Screen
-          name="buy"
+         <Tabs.Screen
+          name="notif"
           options={{
-            title: "Buy",
+            title: "notif",
             headerShown: false,
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon={icons.plus} name="Buy" focused={focused} />
+              <TabIcon icon={icons.notif} name="" focused={focused} />
             ),
           }}
         />
-      </Tabs>
+      
+      <Tabs.Screen
+        name="profile"  
+        options={{
+          title: "profile",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon={icons.Profile} name="" focused={focused} />
+          ),
+          tabBarButton: (props) => (
+            <TouchableOpacity
+              {...props}
+              onPress={() => {
+                router.push('/profile/userdetails');
+              }}
+            />
+          ),
+        }}
+      />
+       </Tabs>
 
-      <StatusBar backgroundColor="#161622" style="light" />
+      <StatusBar backgroundColor="#161622" barStyle="light-content" />
     </SafeAreaView>
   );
 };
@@ -121,14 +140,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#161622',
     height: '100%',
+    marginTop: StatusBar.currentHeight || 0,
   },
-  header: {
-    backgroundColor: '#7DC36B',
-    justifyContent: 'space-between',
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 150, 
-  },
+  // header: {
+  //   backgroundColor: '#7DC36B',
+  //   justifyContent: 'space-between',
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   height: 150, 
+  // },
+
   logoContainer: {
     width: 250,
     height: 250,
@@ -148,22 +169,23 @@ const styles = StyleSheet.create({
   },
   tabBox: {
     display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
+    // flexDirection: 'row',
+    // justifyContent: 'center',
+    // gap: 8,
     paddingTop: 10, 
     alignItems: 'center',   
     borderRadius: 5, // Curved corners
     height: 60,
-    width: 135,
+    width: 100,
     paddingHorizontal: 25, // Horizontal padding
     paddingVertical: 20, //vertical padding
     borderColor: '#000000', // Black border color
     borderWidth: 2, // Thickness of the border
   },
+
   icon: {
-    width: 24, // Adjust width as needed
-    height: 24, // Adjust height as needed
+    width: 32, // Adjust width as needed
+    height: 32, // Adjust height as needed
   },
   text: {
     color: 'black',

@@ -30,6 +30,7 @@ const HomeScreen = () => {
 
   const handlenavtologin = (() => {
     navigation.navigate("(auth)/login");
+    // navigation.navigate("verifynumber");
   });
 
   // for debugging only //comment when done

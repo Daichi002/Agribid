@@ -9,15 +9,17 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  Button,
 } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
 import * as ImageManipulator from 'expo-image-manipulator';
+import DropDownPicker from 'react-native-dropdown-picker';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Picker } from '@react-native-picker/picker';
-import { useAlert } from '../components/AlertContext';
+import CustomAlert from '../components/customeAlert';
 
 
 interface Barangay {
@@ -85,7 +87,7 @@ const Createsell = () => {
   const [price, setPrice] = useState<string>("");
   const [address, setAddress] = useState("");
   const [image, setImage] = useState<string | null>(null);
-  const { showAlert } = useAlert();
+  const [showAlert, setShowAlert] = useState(false);
   const [errors, setErrors] = useState({
     image: '',
     title: '',
@@ -185,7 +187,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   }
 }, [currentUser, barangayLookup]);
 
- const regex = /^\d{0,7}(\.\d{0,2})?$/;
+  const regex = /^\d{0,7}(\.\d{0,2})?$/;
 
   const handleChangeText = (text: string) => {
     if (regex.test(text)) {
@@ -196,12 +198,12 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
     if (regex.test(text)) {
       setQuantity(text);
     }
-  }; 
+  };
 
   const handleImagePicker = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
+      allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
     });
@@ -224,7 +226,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   const handleTakePhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
+      allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
     });
@@ -336,7 +338,10 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
           timeout: 10000,
         });
 
-        showAlert('Produdct Posted successfully!', 3000);
+        setShowAlert(true);
+      setTimeout(() => {
+        setShowAlert(false);
+      }, 3000);
   
         // Handle successful response
         navigation.goBack();
@@ -406,7 +411,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
 
           <Text style={styles.label}>Description Optional</Text>
           <TextInput
-            style={[styles.descriptioninput, { height: 100 }]}
+            style={[styles.input, { height: 100 }]}
             multiline
             value={description}
             onChangeText={setDescription}
@@ -480,6 +485,13 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
 
           <TouchableOpacity style={styles.post} onPress={createProduct}>
             <Text style={styles.buttonText}>Post</Text>
+            {showAlert && (
+        <CustomAlert
+          message="Product Created!"
+          duration={3000}
+          onDismiss={() => setShowAlert(false)}
+        />
+      )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -545,14 +557,6 @@ const styles = StyleSheet.create({
   label: {
     fontWeight: 'bold',
     marginBottom: 5,
-  },
-  descriptioninput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 16,
-    textAlignVertical: 'top',
   },
   input: {
     borderWidth: 1,
@@ -652,9 +656,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonGreen: {
-    // backgroundColor: '#32CD32',
+    backgroundColor: '#32CD32',
   },
   buttonRed: {
-    // backgroundColor: '#FF6347',
+    backgroundColor: '#FF6347',
   },
 });

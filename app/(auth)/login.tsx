@@ -1,10 +1,10 @@
-import { View, Text, ScrollView, StyleSheet, Image } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Image, TextInput } from 'react-native'
 import React, { useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from "expo-router";
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
-import CustomAlert from '../../components/customeAlert';
+import { useAlert } from '../../components/AlertContext';
 
 import FormField from "../../components/formfield";
 import CustomButton from "../../components/CustomButton";
@@ -19,7 +19,7 @@ const Login = () => {
   const navigation = useNavigation();
   const [isSubmitting, setSubmitting] = useState(false);
   const [isLoading,setIsLoading] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);
+  const { showAlert } = useAlert();
 
   const [form, setform] = useState({
     Phonenumber: '',
@@ -39,12 +39,16 @@ const Login = () => {
         Alert.alert("Error", "Please fill all the required fields");
         return; // Return early to prevent further execution
     }
+    // Add +63 prefix if not already present
+  const formattedPhonenumber = form.Phonenumber.startsWith("+63")
+  ? form.Phonenumber
+  : `+63${form.Phonenumber}`;
 
     setIsLoading(true);
 
     try {
         const response = await axios.post('http://10.0.2.2:8000/api/login', {
-            Phonenumber: form.Phonenumber,
+            Phonenumber: formattedPhonenumber,
             password: form.password
         }, {
             headers: {
@@ -60,15 +64,19 @@ const Login = () => {
           await AsyncStorage.setItem('userInfo', JSON.stringify(user));
 
           // Log all user data to the console
-          console.log("User Data:", user);
-
+          // console.log("User Data:", user);
+          setform({
+            Phonenumber: '',
+            password: '',      
+          });
           // Simulate a loading delay for a smoother UX experience
           setTimeout(() => {
-            handleLoginSuccess();
+            showAlert('LogIn Successfully!', 3000);
             // Alert.alert("Success", "Logged in successfully!");
 
             // Navigate to the tabs screen after successful login
             setIsLoading(false);
+            setSubmitting(false);
             router.navigate("/sell");
         }, 2000);
 
@@ -102,11 +110,6 @@ const Login = () => {
     }
 };
 
-const handleLoginSuccess = () => {
-  setShowAlert(true);
-  setTimeout(() => setShowAlert(false), 3000); // Dismiss alert after 3 seconds
-};
-
   return (
     <SafeAreaView style={{ backgroundColor: '#7DC36B', height: '100%' }}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -115,22 +118,44 @@ const handleLoginSuccess = () => {
         </View>
         <Text style={styles.title}>Sign In</Text>
 
+        <View style={styles.numbercontainer}>
         <FormField 
-            title="Phone Number"
-            value={form.Phonenumber}
-            handleChangeText={(e: any) => {
-              // Ensure only numeric values are allowed
-              const numericValue = e.replace(/[^0-9]/g, '');
-              setform({ ...form, Phonenumber: numericValue });
-            }}
+          style={styles.numberinputplaceholder}
+          title="Phone Number"
+          value={form.Phonenumber}
+          handleChangeText={(e: any) => {
+            // Remove all non-numeric characters
+            let numericValue = e.replace(/[^0-9]/g, '');
+
+                // If it starts with '0' and has more than one digit, remove the leading '0'
+            if (numericValue.startsWith('0') && numericValue.length > 1) {
+              numericValue = numericValue.slice(1);
+            }
+          
+            // Check that the cleaned number now starts with '9'
+            if (numericValue.length > 0 && numericValue[0] !== '9') {
+              return; // Discard input if it doesn't start with '9'
+            }
+
+            // Update the form state with the valid phone number
+            setform({ ...form, Phonenumber: numericValue });
+          }}
             keyboardType="numeric"
-            maxLength={11}
+            maxLength={10} // Allow up to 11 digits (including country code)
             inputMode="numeric" 
-            placeholder="091234567"
+            placeholder="91234567"
             placeholderTextColor='#8888'
-            otherStyles={undefined}   
+            otherStyles={styles.numberinput}  
             isSubmitting={isSubmitting}      
           />
+          <View style={styles.countryCodeContainer}>
+          <TextInput
+            style={styles.countryCode}
+            editable={false} // Make it non-editable
+            value="+63" // Display the country code
+          />
+        </View>
+        </View>
 
         <FormField 
           title="Password"
@@ -145,7 +170,7 @@ const handleLoginSuccess = () => {
 
           <View style={styles.forgot}> 
             <Link 
-              href='/' 
+              href='/ForgotPassword' 
               style={styles.link}>
               Forgot Password
             </Link>
@@ -155,15 +180,7 @@ const handleLoginSuccess = () => {
           title={'Sign In'}
           handlePress={submit}
           isLoading={isSubmitting} 
-          setIsLoading={function (loading: boolean): void {} }/>   
-
-           {showAlert && (
-        <CustomAlert
-          message="Logged in successfully!"
-          duration={3000}
-          onDismiss={() => setShowAlert(false)}
-        />
-      )}      
+          setIsLoading={function (loading: boolean): void {} }/>       
          <View style={styles.Ask}>
             <Text style={styles.asktext}>
               Don't have an account?
@@ -210,6 +227,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
+  numbercontainer: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  numberinput: {
+    flex: 1,
+    // padding: 10,
+    // paddingLeft: 30, // Add padding to prevent text from overlapping the country code
+    fontSize: 16,
+  },
+  numberinputplaceholder: {
+    paddingLeft: 23, // Adjust the padding value as needed
+    fontSize: 16, // Adjust the font size as needed
+  },
+  countryCodeContainer: {
+    marginTop: 26,
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    // backgroundColor: '#f5f5f5', // Background color to match the input
+    zIndex: 1, // Ensure it stays above the input
+  },
+  countryCode: {
+    fontSize: 16,
+    width: 30, // Fixed width to ensure consistent layout
+    textAlign: 'center', // Center the text
+    color: '#1F1F1F', // Adjust the color as needed
+  },
   Ask: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -229,8 +275,9 @@ const styles = StyleSheet.create({
 
   forgot: {
     paddingBottom: 20,
-    marginRight: 160,
+    alignSelf: 'flex-start',
   },
+
   placeholder: {
     color: '#fffff',
   }

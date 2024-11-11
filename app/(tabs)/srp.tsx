@@ -7,7 +7,7 @@ import axios from "axios";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { icons } from "../../constants";
 
-const cacheImage = async (uri) => {
+const cacheImage = async (uri: string) => {
   const filename = uri.split('/').pop();
   const fileUri = `${FileSystem.documentDirectory}${filename}`;
   const info = await FileSystem.getInfoAsync(fileUri);
@@ -19,14 +19,29 @@ const cacheImage = async (uri) => {
     return response.uri; // Return newly downloaded image URI
   }
 };
-const ProductImage = React.memo(({ imageUri }) => {
+interface ProductImageProps {
+  imageUri: string;
+}
+
+const ProductImage = React.memo(({ imageUri }: ProductImageProps) => {
   return <Image source={{ uri: imageUri }} style={styles.productImage} />;
 });
 
-const ProductItem = React.memo(({ item }) => {
+interface ProductItemProps {
+  item: {
+    id: string;
+    title: string;
+    description: string;
+    locate: string;
+    created_at: string;
+    image: string;
+  };
+}
+
+const ProductItem = React.memo(({ item }: ProductItemProps) => {
   // console.log('Rendering ProductItem for:', item);
 
-  const [imageUri, setImageUri] = useState(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   // console.log('Rendering ProductItem for:', imageUri);
 
   useEffect(() => {
@@ -55,14 +70,14 @@ const ProductItem = React.memo(({ item }) => {
 
   return (
     <View style={styles.productItem}>
-      <View style={styles.imageContainer}>
+      <View style={styles.imagecontainer}>
         {imageUri ? (
           <ProductImage imageUri={imageUri} />
         ) : (
           <ActivityIndicator size="small" color="#0000ff" />
         )}
       </View>
-      <View style={styles.productDetailsContainer}>
+      <View style={styles.productdetailscontainer}>
         <Text style={styles.productTitle}>{title}</Text>
         <Text style={styles.productDescription}>Description: {description}</Text>
         <Text style={styles.productDescription}>Located: {locate}</Text>
@@ -76,7 +91,7 @@ const ProductItem = React.memo(({ item }) => {
 
 
 const Srp = () => {
-  const [srp, setSrp] = useState([]);
+  const [srp, setSrp] = useState<{ id: string; title: string; description: string; locate: string; created_at: string; image: string; }[]>([]);
   const [sortOrder, setSortOrder] = useState("desc");
   const [isRefreshing, setIsRefreshing] = useState(false);
   // const sortedSrp = SortedSrp(srp, sortOrder);
@@ -102,16 +117,16 @@ const Srp = () => {
   
       // console.log("Raw API Response:", response.data); // Log the raw API response
   
-      const enhancedProducts = response.data.map((product) => {
+      const enhancedProducts = response.data.map((product: { id: string; title: string; description: string; locate: string; created_at: string; image: string; }) => {
         if (!product.id) {
           console.warn('Product without ID:', product);
         }
         return {
           ...product,
         };
-      }).filter(product => product && product.id); // Ensure valid products with IDs
+      }).filter((product: { id: string }) => product && product.id); // Ensure valid products with IDs
   
-      console.log("Enhanced Products:", enhancedProducts);
+      // console.log("Enhanced Products:", enhancedProducts);
   
       setSrp(enhancedProducts);
       await updateAsyncStorage(enhancedProducts);
@@ -134,14 +149,14 @@ const Srp = () => {
   
 
    // save the new data to asyncstorage for a more faster render
-   const updateAsyncStorage = async (newData) => {
+   const updateAsyncStorage = async (newData: any[]) => {
     try {
       // Fetch current data from AsyncStorage
       const existingData = await AsyncStorage.getItem('srp');
       let currentData = existingData ? JSON.parse(existingData) : [];
   
       // Create a map of current data for quick lookup
-      const currentDataMap = new Map(currentData.map(item => [item.id, item]));
+      const currentDataMap = new Map(currentData.map((item: { id: string }) => [item.id, item]));
   
       // Update existing entries and add new ones
       newData.forEach(newItem => {
@@ -161,11 +176,11 @@ const Srp = () => {
   };
 
 
-  const sortSrp = (srp, sortOrder) => {
+  const sortSrp = (srp: { created_at: string }[], sortOrder: string) => {
     return srp.sort((a, b) => {
       const dateA = new Date(a.created_at);
       const dateB = new Date(b.created_at);
-      return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+      return sortOrder === "desc" ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
     });
   };
 

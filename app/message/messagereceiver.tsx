@@ -8,32 +8,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import axios, { AxiosResponse } from 'axios'; // Using axios for API requests
 import Pusher from 'pusher-js/react-native';
-import { icons } from "../constants";
-// import { Channel } from 'laravel-echo';
+import { icons } from "../../constants";
+import { images } from "../../constants";
 import { useFocusEffect } from '@react-navigation/native';
 
-interface Product {
-  id: number;
-  user_id: number;
-  title: string;
-  image: string;
-  description: string;
-  quantity: string;
-  price: string;
-  locate: string;
-}
-
-interface sender {
-  id: string;
-  Firstname: string; 
-  Lastname: string;
-  Phonenumber: string;
-  Address: string;
-  created_at: string;
-  updated_at: string;
-}
-
 interface Message {
+  id: never;
   productId: number;
   senderId: number;
   receiverId: number;
@@ -41,7 +21,7 @@ interface Message {
 }
 
 // Caching function
-const cacheImage = async (uri) => {
+const cacheImage = async (uri: string) => {
   const filename = uri.split('/').pop();
   const fileUri = `${FileSystem.documentDirectory}${filename}`;
   const info = await FileSystem.getInfoAsync(fileUri);
@@ -53,16 +33,43 @@ const cacheImage = async (uri) => {
     return response.uri; // Return newly downloaded image URI
   }
 };
-const MessageImage = React.memo(({ imageUri }) => {
+
+interface MessageImageProps {
+  imageUri: string;
+}
+
+const MessageImage = React.memo(({ imageUri }: MessageImageProps) => {
   return <Image source={{ uri: imageUri }} style={styles.messageImage} />;
 });
 
-const RenderMessage = React.memo(({ item, currentUserId, OriginalImage }) => {
-  console.log('RenderMessage item:', item); // Log the item to ensure it's correct
+interface RenderMessageProps {
+  item: any;
+  currentUserId: string;
+  OriginalImage: (uri: string) => void;
+  handlelink: (url: string) => void;
+}
 
+const RenderMessage: React.FC<RenderMessageProps> = React.memo(({ item, currentUserId, OriginalImage, handlelink }) => {
   const isCurrentUser = parseInt(item.receiver_id) === parseInt(currentUserId);
-  const [imageUri, setImageUri] = useState(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const productPrefix = '@product/';
+  
+          // Find the index of `@product/` in the text
+          const startIdx = item.text.indexOf(productPrefix);
+          const base64Part = startIdx !== -1 ? item.text.slice(startIdx + productPrefix.length, startIdx + productPrefix.length + 16) : '';
+          
+          // Check if the text has a valid `@product/` link with a 16-character Base64 part
+          const isValidBase64Link = base64Part.length === 16 && /^[A-Za-z0-9+/=]+$/.test(base64Part);
+          
+          // Only treat as a link if the text starts with `@product/` and has exactly 16 valid Base64 characters
+          const hasValidLink = startIdx !== -1 && isValidBase64Link;
+
+          // Split the text into parts
+          const beforeText = startIdx !== -1 ? item.text.slice(0, startIdx) : item.text;
+          const productLink = hasValidLink ? item.text.slice(startIdx, startIdx + productPrefix.length + 16) : '';
+          const afterText = hasValidLink ? item.text.slice(startIdx + productPrefix.length + 16) : item.text.slice(startIdx);
 
   const sender = item.sender || {};
   const displayName = isCurrentUser ? `${sender.Firstname || 'Unknown'} ${sender.Lastname || ''}` : 'You';
@@ -70,25 +77,35 @@ const RenderMessage = React.memo(({ item, currentUserId, OriginalImage }) => {
   // Load image function
   const loadImage = useCallback(async () => {
     let uri = item.text;
+  
+    // Check if text has an image extension and treat as an image
     if (uri && (uri.endsWith('.jpg') || uri.endsWith('.jpeg') || uri.endsWith('.png') || uri.endsWith('.gif'))) {
+      // Construct full URL if needed
       if (!uri.startsWith('http')) {
         uri = `http://10.0.2.2:8000/storage/message/images/${uri}`;
       }
+  
       setLoading(true);
-      const cachedUri = await cacheImage(uri); // Assuming you have this function
-      setImageUri(cachedUri);
-      setLoading(false);
+  
+      try {
+        // Clear any existing cache for updated images or cache anew
+        const cachedUri = await cacheImage(uri, { forceRefresh: true });
+        setImageUri(cachedUri);
+      } catch (error) {
+        console.error("Failed to load image, displaying text instead:", error);
+        setImageUri(null); // Fallback to display text
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // If the text is not an image URI, show text directly
+      setImageUri(null);
     }
   }, [item.text]);
-
+  
   useEffect(() => {
     loadImage();
-  }, [loadImage]);
-
-  if (!item.text) {
-    // console.error('Empty message text:', message); // Log when message text is empty
-    // return null; // Prevent rendering when there is no text
-  }
+  }, [loadImage]);  
 
   return (
     <View style={[styles.messageContainer, isCurrentUser ? styles.sentMessage : styles.receivedMessage]}>
@@ -96,16 +113,65 @@ const RenderMessage = React.memo(({ item, currentUserId, OriginalImage }) => {
         <ActivityIndicator size="large" color="#0000ff" />
       ) : imageUri ? (
         <TouchableOpacity onPress={() => OriginalImage(item.text)}>
-        <MessageImage imageUri={imageUri} />
+          <MessageImage imageUri={imageUri} />
         </TouchableOpacity>
       ) : (
-        <Text style={styles.messageText}>{item.text}</Text> // Access message.text here
+        <TouchableOpacity onPress={() => hasValidLink && handlelink(productLink)}>
+                      <Text style={styles.messageText}>
+                        {beforeText}
+                        {hasValidLink ? (
+                          <Text style={{ color: 'blue' }}>
+                            {productLink}
+                          </Text>
+                        ) : (
+                          productLink // Display the text as normal if it's not a valid link
+                        )}
+                        {afterText}
+                      </Text>
+                    </TouchableOpacity>
       )}
       <Text style={styles.senderName}>{displayName}</Text>
     </View>
   );
 });
 
+
+interface ImagePickerModalProps {
+  visible: boolean;
+  onChooseFromStorage: () => void;
+  onTakePhoto: () => void;
+  onClose: () => void;
+}
+
+const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ visible, onChooseFromStorage, onTakePhoto, onClose }) => {
+  const takestorage = () => {
+    onChooseFromStorage();
+    onClose();
+  };
+  const takephoto = () => {
+    onTakePhoto();
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent={true} animationType="slide">
+      <View style={styles.modalimagecontainer}>
+      <View style={styles.modal}>
+        <Text style={styles.title}>Choose Image Source</Text>
+        <TouchableOpacity style={styles.button} onPress={takestorage}>
+          <Text style={styles.buttonText}>Upload from Storage</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button, styles.buttonGreen]} onPress={takephoto}>
+          <Text style={styles.buttonText}>Take Photo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button, styles.buttonRed]} onPress={onClose}>
+          <Text style={styles.buttonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+    </Modal>
+  );
+};
 
 const MessageScreen2 = ( ) => {
   const navigation = useNavigation();
@@ -120,10 +186,13 @@ const MessageScreen2 = ( ) => {
   const handleScrollBeginDrag = () => setIsUserScrolling(true);
   const handleMomentumScrollEnd = () => setIsUserScrolling(false);
   const [showOriginalImage, setShowOriginalImage] = useState(false);
-  const [imageUri, setImageUri] = useState(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
 
 interface SendMessageParams {
+  id: string;
   productId: number;
   senderId: number;
   receiverId: number;
@@ -147,72 +216,69 @@ interface SendMessageParams {
     setShowOriginalImage(true); // Open the modal
   };
 
+
+
   // Listen to messages from Pusher
-// Initialize Pusher
-const pusher = new Pusher("87916f2c03247f41316e", {
-  cluster: "ap1",
-  encrypted: true,
+useEffect(() => {
+  const pusher = new Pusher('87916f2c03247f41316e', {
+    cluster: 'ap1',
+  });
+
+  // Construct the channel name based on currentUserId
+  const channelName = `chat.${currentUserId}`;
+  console.log(`Subscribing to receiverchannel: ${channelName}`);
+
+  // Subscribe to the receiver's channel (based on currentUserId)
+  const channel = pusher.subscribe(channelName);
+  
+  // Log when the channel is successfully subscribed
+  channel.bind('pusher:subscription_succeeded', () => {
+    console.log(`Successfully subscribed to ${channelName}`);
+  });
+  console.log('currentUserId', currentUserId, channelName)
+
+  // channel.bind('App\\Events\\MessageSent', function(data) {
+  //   console.log('Broadcast received:', data);
+
+  channel.bind('MessageSent', function(data: { message: { receiver_id: any; [key: string]: any; }; }) {
+    // Log the broadcast received
+    console.log('Broadcast received:', data);
+
+    // Ensure the message content exists
+    const messageContent = data.message;
+    if (!messageContent) {
+        console.error('Message content is undefined');
+        return;
+    }
+
+    // Access the receiver_id
+    const receiverId = messageContent.receiver_id;
+    console.log('currentUserId to trig', currentUserId, channelName);
+
+    // Check if the current user is the intended receiver
+    if (receiverId && currentUserId && parseInt(receiverId) === parseInt(currentUserId)) {
+        console.log('New message for me:', messageContent);
+        // Trigger the fetchMessages() function to get updated messages
+         // Ensure prevMessages is an array and messageContent is properly added
+         setMessages((prevMessages: any[]) => Array.isArray(prevMessages) ? [...prevMessages, messageContent] : [messageContent]);
+         fetchMessages();  // Debug this not triggering the fetch message
+         updateMessagesInStorage(productId, [messageContent]); // Ensure updateMessagesInStorage gets an array
+    } else {
+        console.log('Message received, but not for me. Ignoring...');
+    }
 });
 
-// Subscribe to channel
-const channel = pusher.subscribe('my-channel');
+  // Log if there is an error in subscription
+  channel.bind('pusher:subscription_error', (status: any) => {
+    console.error('Subscription error:', status);
+  });
 
-// Bind to an event
-channel.bind('my-event', function(data) {
-  console.log('Received data:', data);
-});
+  return () => {
+    channel.unbind_all();
+    channel.unsubscribe();
+  };
+}, [currentUserId]);
 
-
-
-  useEffect(() => {
-    const pusher = new Pusher("87916f2c03247f41316e", {
-      cluster: "ap1",
-      encrypted: true,
-    });
-  
-    const receiverChannel = pusher.subscribe(`chat.${senderId}`);
-    receiverChannel.bind('MessageSent', function(data) {
-      console.log('Receiver Event received:', data);
-      setMessages((prevMessages) => [...prevMessages, data.message]);
-    });
-  
-    return () => {
-      receiverChannel.unbind_all();
-      receiverChannel.unsubscribe();
-    };
-  }, [currentUserId, senderId]);
-  
-
-  useEffect(() => {
-    let chatChannel: PusherChannel;
-  
-    if (!currentUserId || !senderId) return;
-  
-    const initPusher = async () => {
-      const pusher = Pusher.getInstance();
-      await pusher.init({
-        apiKey: '87916f2c03247f41316e',
-        cluster: 'ap1',
-      });
-      await pusher.connect();
-  
-      chatChannel = await pusher.subscribe({
-        channelName: `chat.${senderId}`,
-        onEvent: (event) => {
-          console.log('Receiver Event received:', event.data);
-          setMessages((prevMessages) => [...prevMessages, event.data.message]);
-          saveMessages([...messages, event.data.message], event.data.message);
-        },
-      });
-  
-      return () => {
-        if (chatChannel) chatChannel.unsubscribe();
-        pusher.disconnect();
-      };
-    };
-  
-    initPusher();
-  }, [currentUserId, senderId]);
   
 
 
@@ -229,8 +295,11 @@ channel.bind('my-event', function(data) {
       sendMessage(paramsToSend);
     };
 
-    // Fetch messages from server
-  useEffect(() => {
+  useEffect(() => {  
+    fetchMessages();
+  }, [productId, sessions]); 
+  
+  // Fetch messages from server
     const fetchMessages = async () => {
       if (!productId) return;
   
@@ -265,56 +334,87 @@ channel.bind('my-event', function(data) {
       }
     };
   
-    fetchMessages();
-  }, [productId, sessions]);
+  
 
-  const updateMessagesInStorage = async (productId: string | string[], newMessages: any[]) => {
-    try {
-      // Fetch current messages from AsyncStorage
-      const existingMessages = await AsyncStorage.getItem(`messages_${productId}`);
-      let currentMessages = existingMessages ? JSON.parse(existingMessages) : [];
+    const updateMessagesInStorage = async (productId: string | string[], newMessages: any[]) => {
+      try {
+          // Fetch current messages from AsyncStorage
+          const existingMessages = await AsyncStorage.getItem(`messages_${productId}`);
+          let currentMessages = existingMessages ? JSON.parse(existingMessages) : [];
   
-      // Create a map to keep track of unique messages by ID
-      const messageMap = new Map();
-      currentMessages.forEach((msg: { id: any; }) => messageMap.set(msg.id, msg));
+          // Create a map to keep track of unique messages by ID
+          const messageMap = new Map();
+          currentMessages.forEach((msg: { id: any; }) => messageMap.set(msg.id, msg));
   
-      // Add new messages to the map, overwriting any duplicates
-      newMessages.forEach(msg => messageMap.set(msg.id, msg));
+          // Check if newMessages is an array
+          if (Array.isArray(newMessages)) {
+              // Add new messages to the map, overwriting any duplicates
+              newMessages.forEach(msg => messageMap.set(msg.id, msg));
+          } else {
+              console.error('newMessages is not an array:', newMessages);
+              return;
+          }
   
-      // Convert the map back to an array
-      const combinedMessages = Array.from(messageMap.values());
+          // Convert the map back to an array
+          const combinedMessages = Array.from(messageMap.values());
   
-      // Save updated messages to AsyncStorage
-      await AsyncStorage.setItem(`messages_${productId}`, JSON.stringify(combinedMessages));
+          // Save updated messages to AsyncStorage
+          await AsyncStorage.setItem(`messages_${productId}`, JSON.stringify(combinedMessages));
   
-      console.log('AsyncStorage updated with new messages.');
-    } catch (error) {
-      console.error('Failed to update AsyncStorage:', error);
-    }
+          console.log('AsyncStorage updated with new messages.');
+      } catch (error) {
+          console.error('Failed to update AsyncStorage:', error);
+      }
   };
 
 
-  const pickImage = async () => {
-    setNewMessage('');
-    let result = await ImagePicker.launchImageLibraryAsync({
+  const handleImagePicker = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsEditing: false,
       aspect: [4, 3],
       quality: 1,
     });
   
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const imageUri = result.assets[0].uri;
+      const imageUri = result.assets[0].uri; // Use result.assets[0].uri
+      console.log('Picked Image URI:', imageUri); // Log for debugging
+  
+      setNewMessage(imageUri); // Set the original image URI
       const compressedUri = await compressImage(imageUri);
-          if (compressedUri) {
-            setNewMessage(compressedUri);
-          } else {
-            console.error('Failed to compress image, URI is undefined');
-          }
+      
+      if (compressedUri) {
+        setNewMessage(compressedUri); // Set compressed image URI
+      } else {
+        console.error('Failed to compress image, URI is undefined');
+      }
     }
   };
   
-  const compressImage = async (uri) => {
+  const handleTakePhoto = async () => {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      aspect: [4, 3],
+      quality: 1,
+    });
+  
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const imageUri = result.assets[0].uri; // Use result.assets[0].uri
+      console.log('Taken Photo URI:', imageUri); // Log for debugging
+  
+      setNewMessage(imageUri); // Set the original image URI
+      const compressedUri = await compressImage(imageUri);
+  
+      if (compressedUri) {
+        setNewMessage(compressedUri); // Set compressed image URI
+      } else {
+        console.error('Failed to compress image, URI is undefined');
+      }
+    }
+  };
+  
+  const compressImage = async (uri: string) => {
     try {
       const manipulatedImage = await ImageManipulator.manipulateAsync(
         uri,
@@ -326,12 +426,12 @@ channel.bind('my-event', function(data) {
       console.error('Image compression error:', error);
       Alert.alert("Error", "Image compression failed. Please try again.");
     }
-  }; 
+  };
     
   
   
     // Send message function
-    const sendMessage = async ({ productId, senderId, receiverId, sessions }: SendMessageParams) => {
+  const sendMessage = async ({ productId, senderId, receiverId, sessions }: SendMessageParams) => {
       if (!newMessage.trim()) {
         return;
       }
@@ -354,7 +454,7 @@ channel.bind('my-event', function(data) {
               uri: newMessage,
               type: 'image/jpeg',
               name: fileName,
-            });
+            }as any);
           } catch (error) {
             console.error('Error fetching the image:', error);
             Alert.alert("Error", "Could not process the image. Please try again.");
@@ -389,7 +489,7 @@ channel.bind('my-event', function(data) {
     
         formData.append('sessions', session);
     
-        console.log('Final message data to send:', formData);
+        // console.log('Final message data to send:', formData);
     
         const response = await axios.post('http://10.0.2.2:8000/api/messages', formData, {
           headers: {
@@ -411,7 +511,7 @@ channel.bind('my-event', function(data) {
     // Handle the response
     const handleResponse = (response: AxiosResponse<any, any>) => {
       const newMessage = response.data; // Assuming the response data contains the new message
-      console.log('New Message:', newMessage); // Log the new message
+      // console.log('New Message:', newMessage); // Log the new message
       setMessages((prevMessages) => [...prevMessages, newMessage.message]); // Update state with the new message
       saveMessages(messages, newMessage); // Save the new message to AsyncStorage
     };
@@ -441,6 +541,7 @@ channel.bind('my-event', function(data) {
         const loadMessages = async () => {
           const storedMessages = await AsyncStorage.getItem('messages');
           if (storedMessages) {
+
             setMessages(JSON.parse(storedMessages));
           }
         };
@@ -542,33 +643,118 @@ useFocusEffect(
     }
   }, [messages])
 );
+
+const rate = () => {
+  if (productId && currentUserId) {
+    navigation.navigate('Rating', { productId: productId, userId: currentUserId } as never);
+    setReportModalVisible(false)
+  }
+};
+const report = () => {
+  if (productId && currentUserId) {
+    navigation.navigate('Reports/reportmessage', { messageId: messages[0]?.id, usermessageId: senderId } as never);
+    setReportModalVisible(false)
+  }
+};
+
+
+const handlelink = (url: string) => {
+  try {
+    const encodedData = url.split('/').pop();
+
+    if (encodedData) {
+      // Attempt to decode base64 and parse JSON
+      const decodedData = JSON.parse(atob(encodedData));
+      const productId = decodedData.id;
+
+      if (productId) {
+        // Navigate to product details if `productId` exists
+        navigation.navigate('ProductDetails', { productId });
+        console.log('Navigating to product details:', productId);
+      } else {
+        // Product ID not found in decoded data
+        throw new Error('Product ID not found in decoded data');
+      }
+    } else {
+      // Encoded data not found in URL
+      throw new Error('Encoded data not found in URL');
+    }
+  } catch (error) {
+    console.error('Error decoding URL:', error);
+    Alert.alert(
+      'Invalid Link',
+      'The link provided is invalid. Please use a valid link.',
+      [{ text: 'OK' }]
+    );
+  }
+};
+
   
-//   console.log('messagecontent', messages); 
+
   
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header code remains the same */}
-      <View style={styles.header}>
-      {/* Back button */}
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backicon}>
-        <Image
-          source={icons.leftArrow}  // Your local icon
-          style={{ tintColor: 'white' }} 
-          />
-      </TouchableOpacity>
-      {/* Title (Receiver's Name) */}
-      <Text style={styles.receiverNameheader}>
-        {sender?.Firstname} {sender?.Lastname}
-      </Text>
-    </View>
+     <View style={styles.header}>
+  {/* Back Button */}
+  <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backicon}>
+    <Image source={icons.leftArrow} style={{ tintColor: 'white', width: 24, height: 24 }} />
+  </TouchableOpacity>
+
+  {/* Title (Receiver's Name) */}
+  <Text style={styles.receiverNameheader}>
+    {sender?.Firstname} {sender?.Lastname}
+  </Text> 
+
+  {/* Menu Icon */}
+  <TouchableOpacity onPress={() => setReportModalVisible(true)} style={styles.menuButton}>
+    <Image source={icons.menu} style={styles.menuIcon} resizeMode="contain" /> 
+  </TouchableOpacity>
+</View>
+
+
+    {/* Report Modal for creating a report */}
+  <Modal
+        animationType="slide"
+        transparent={true}
+        visible={reportModalVisible}
+        onRequestClose={() => setReportModalVisible(false)}
+      >
+        <View style={styles.reportModalContainer}>
+          <View style={styles.reportModalContent}>
+            <Text style={styles.reportModalTitle}>Customer Experience</Text>
+
+            {/* <TouchableOpacity style={styles.rateButton} onPress={rate}>
+              <View style={styles.buttonContent}>
+                <Image source={icons.rate} style={styles.ExpIcon} resizeMode="contain" />
+                <Text style={styles.rateButtonText}>Rate </Text>
+              </View>
+            </TouchableOpacity> */}
+
+            <TouchableOpacity style={styles.rateButton} onPress={report}>
+              <View style={styles.buttonContent}>
+                <Image source={icons.report} style={styles.ExpIcon} resizeMode="contain" />
+                <Text style={styles.rateButtonText}>Report</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setReportModalVisible(false)}>
+              <Text style={styles.reportCloseButton}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     {loading ? <Text>Loading...</Text> : 
   <FlatList
     ref={flatListRef}
     data={messages}
     extraData={messages}
     renderItem={({ item }) => {
+
       // console.log('FlatList item:', item); // Log the item to the console
-      return item ? <RenderMessage item={item} currentUserId={currentUserId} OriginalImage={OriginalImage}/> : null;
+
+
+      return item ? <RenderMessage item={item} currentUserId={currentUserId} OriginalImage={OriginalImage} handlelink={handlelink}/> : null;
     }}
     keyExtractor={(item, index) => item.id ? item.id.toString() : `key-${index}`}
     initialNumToRender={10} // Reduce initial number of items rendered
@@ -598,12 +784,24 @@ useFocusEffect(
         flatListRef.current.scrollToEnd({ animated: true });
       }
     }}
+    onViewableItemsChanged={({ viewableItems }) => {
+      if (viewableItems.length === messages.length) {
+        if (!isUserScrolling && flatListRef.current && messages.length > 0) {
+          flatListRef.current.scrollToEnd({ animated: true });
+        }
+      }
+    }}
+    viewabilityConfig={{
+      itemVisiblePercentThreshold: 100,
+    }}
     onScroll={handleScrollBeginDrag}
     onMomentumScrollEnd={handleMomentumScrollEnd}
     onScrollToIndexFailed={(info) => {
       flatListRef.current?.scrollToIndex({ index: info.highestMeasuredFrameIndex, animated: true });
     }}
   />}
+
+  
   <View style={styles.inputContainer}>
     {newMessage && newMessage.startsWith('file') && (
       <Image source={{ uri: newMessage }} style={styles.imagePreview} />
@@ -615,7 +813,14 @@ useFocusEffect(
       onChangeText={setNewMessage}
       editable={!(newMessage && newMessage.startsWith('file'))} // Disable typing if an image is selected
     />
-    <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+    <ImagePickerModal
+          visible={isModalVisible}
+          onChooseFromStorage={handleImagePicker}
+          onTakePhoto={handleTakePhoto}
+          onClose={() => setIsModalVisible(false)}
+        />
+
+    <TouchableOpacity style={styles.imageButton} onPress={() => setIsModalVisible(true)}>
       <Text style={styles.imageButtonText}>📷</Text>
     </TouchableOpacity>
     <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
@@ -638,7 +843,7 @@ useFocusEffect(
                     source={{ uri: imageUri }} 
                     style={styles.originalImage}
                     onError={() => console.log('Image failed to load')}
-                    defaultSource={require('../assets/images/empty.png')}
+                    defaultSource={images.empty}
                   />
                 )}
               <TouchableOpacity style={styles.closeButton} onPress={() => setShowOriginalImage(false)}>
@@ -669,17 +874,22 @@ header: {
   height: 70,
   width: '100%',
   backgroundColor: '#7DC36B',
-  alignSelf: 'flex-start',
+  // alignSelf: 'flex-start',
   paddingHorizontal: 15,
+  justifyContent: 'space-between', // Space between elements
   flexDirection: 'row',
   alignItems: 'center',
 },
 
 receiverNameheader: {
-  fontSize: 18,
+  flex: 1, // Allow the name to take up available space
+  fontSize: 22,
   fontWeight: 'bold',
-  paddingStart: 20,
+  textAlign: 'center', // Center the name text
+  paddingRight: 'auto', // Add padding to prevent overlap with menu icon
+  marginRight: 'auto', // Add margin to prevent overlap with menu icon
 },
+
 receiverName: {
   fontSize: 18,
   fontWeight: 'bold',
@@ -819,5 +1029,114 @@ closeText: {
   fontSize: 24,
   fontWeight: 'bold',
   color: '#000',
+},
+menuButton: {
+  paddingLeft: 10,
+  paddingBottom: 25,
+},
+
+menuIcon: {
+  width: 24, // Set width for the menu icon
+  height: 24, // Set height for the menu icon
+  tintColor: '#fff', // Change color to match the header (adjust as needed)
+  position: 'absolute',
+  right: 10,
+},
+reportModalContainer: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0, 0, 0, 0.5)', // semi-transparent background overlay
+},
+reportModalContent: {
+  width: '80%',
+  padding: 25,
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 5, // shadow for Android
+},
+reportModalTitle: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#333',
+  marginBottom: 20,
+  textAlign: 'center',
+},
+rateButton: {
+  backgroundColor: '#4CAF50', // Green button color
+  paddingVertical: 12,
+  borderRadius: 8,
+  marginVertical: 10,
+  width: '80%',
+  alignSelf: 'center', // Center the button itself on the screen
+  alignItems: 'center', // Center content horizontally within the button
+},
+buttonContent: {
+  flexDirection: 'row', // Arrange icon and text horizontally
+  alignItems: 'center', // Center vertically within the row
+  justifyContent: 'center', // Center content within the button area
+},
+ExpIcon: {
+  width: 24,
+  height: 24,
+  tintColor: '#fff',
+  marginRight: 10, // Space between icon and text
+},
+rateButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: 'bold',
+  textAlign: 'left', // Keep text aligned left in the row
+},
+reportCloseButton: {
+  color: '#007BFF', // blue color for close button
+  fontSize: 16,
+  fontWeight: 'bold',
+  textAlign: 'center',
+  marginTop: 15,
+},
+modalimagecontainer: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0,0,0,0.5)', // Add a slight overlay for focus
+},
+modal: {
+  backgroundColor: 'white',
+  padding: 20,
+  borderRadius: 10,
+  paddingBottom: 5,
+  width: '80%', // Make the modal wider
+  alignItems: 'center', // Center-align the buttons and text
+},
+title: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  marginBottom: 20,
+  textAlign: 'center',
+},
+button: {
+  backgroundColor: '#1E90FF',
+  padding: 10,
+  borderRadius: 5,
+  marginTop: 10,
+  width: '100%',
+  alignItems: 'center',
+},
+buttonGreen: {
+  // backgroundColor: '#32CD32',
+},
+buttonRed: {
+  // backgroundColor: '#FF6347',
+},
+buttonText: {
+  color: 'white',
+  fontWeight: 'bold',
+  fontSize: 16,
 },
 });

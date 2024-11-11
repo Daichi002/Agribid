@@ -1,5 +1,5 @@
 
-import { View, Text, ScrollView, StyleSheet, Image, Alert, Modal, Button, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Image, Alert, Modal, Button, TouchableOpacity, TextInput } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { Link, router } from "expo-router";
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,10 +11,10 @@ import FormField from "../../components/formfield";
 import CustomButton from "../../components/CustomButton";
 import { icons } from "../../constants";
 
+
 const Signup = () => {
   const [isSubmitting, setSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);
 
   const [form, setform] = useState({
     Firstname: '',
@@ -93,33 +93,39 @@ interface LookupMap {
       setSubmitting(false);
       return;
     }
+
+     // Add +63 prefix if not already present
+  const formattedPhonenumber = form.Phonenumber.startsWith("+63")
+  ? form.Phonenumber
+  : `+63${form.Phonenumber}`;
+
     setIsLoading(true);
     
     try {
-      const response = await axios.post('http://10.0.2.2:8000/api/register', {
+      // Check if the phone number already exists
+      const checkResponse = await axios.get('http://10.0.2.2:8000/api/check-phone', {
+        params: { Phonenumber: formattedPhonenumber },
+        headers: { 'Content-Type': 'application/json' },
+      });
+  
+      if (checkResponse.data.exists) {
+        Alert.alert("Error", "Phone number already exists.");
+        setIsLoading(false);
+        setSubmitting(false);
+        return;
+      }
+
+      console.log('sending to vefiry')
+      router.push({
+        pathname: '/verifynumber',
+        params: {
         Firstname: form.Firstname,
         Lastname: form.Lastname,
-        Phonenumber: form.Phonenumber,
+        Phonenumber: formattedPhonenumber,
         Address: form.Address,
-        password: form.password,
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
+        password: form.password, // Assuming the receiver is the product user
         },
-      });
-      setIsLoading(false);
-      setTimeout(() => {
-        handleLoginSuccess();
-        // Alert.alert("Success", "User registered successfully!")
-        // Navigate to the tabs screen after successful login
-        setIsLoading(false);
-
-        // change directory if to desired outcome
-        router.navigate("/sell");  // Navigate to Home page after success
-        // router.replace('/login'); // Navigate to login page after success
-    }, 2000);
-     ;
-     
+      });   
 
     } catch (error: unknown) {
       setIsLoading(false);
@@ -135,11 +141,6 @@ interface LookupMap {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleLoginSuccess = () => {
-    setShowAlert(true);
-    setTimeout(() => setShowAlert(false), 3000); // Dismiss alert after 3 seconds
   };
 
   const [provinceLookup, setProvinceLookup] = useState<{ [key: string]: string }>({});
@@ -262,28 +263,49 @@ const handleAddressSelect = () => {
           placeholderTextColor='#8888'
           isSubmitting={isSubmitting} 
         />
-
+        <View style={styles.numbercontainer}>
         <FormField 
-            title="Phone Number"
-            value={form.Phonenumber}
-            handleChangeText={(e: any) => {
-              // Ensure only numeric values are allowed
-              const numericValue = e.replace(/[^0-9]/g, '');
-              setform({ ...form, Phonenumber: numericValue });
-            }}
-            keyboardType="numeric"
-            maxLength={11}
-            inputMode="numeric" 
-            placeholder="091234567"
-            placeholderTextColor='#8888'
-            otherStyles={undefined}   
-            isSubmitting={isSubmitting}      
-          />
+          style={styles.numberinputplaceholder}
+          title="Phone Number"
+          value={form.Phonenumber}
+          handleChangeText={(e: any) => {
+            // Remove all non-numeric characters
+            let numericValue = e.replace(/[^0-9]/g, '');
+
+            // Check if the numeric value is empty or starts with '0'
+            if (numericValue.startsWith('0') && numericValue.length > 1) {
+              numericValue = numericValue.slice(1);
+            }
+          
+            // Check that the cleaned number now starts with '9'
+            if (numericValue.length > 0 && numericValue[0] !== '9') {
+              return; // Discard input if it doesn't start with '9'
+            }
+
+            // Update the form state with the valid phone number
+            setform({ ...form, Phonenumber: numericValue });
+          }}
+          keyboardType="numeric"
+          maxLength={10} // Allow up to 11 digits (including country code)
+          inputMode="numeric" 
+          placeholder="91234567"
+          placeholderTextColor='#8888'
+          otherStyles={styles.numberinput}  
+          isSubmitting={isSubmitting}      
+        />
+        <View style={styles.countryCodeContainer}>
+        <TextInput
+          style={styles.countryCode}
+          editable={false} // Make it non-editable
+          value="+63" // Display the country code
+        />
+      </View>
+      </View>
           <>
               <TouchableOpacity onPress={() => setModalVisible(true) }>
                 <Text style={styles.formTitle}>Address</Text>
                 <View style={styles.addressInputContainer}>
-                  <Text style={styles.addressInput}>
+                <Text style={[styles.addressInput, !form.Address && styles.placeholderaddress]}>
                     {form.Address || 'Select Address'}
                   </Text>
                 </View>
@@ -321,20 +343,21 @@ const handleAddressSelect = () => {
 
                   <Text style={styles.label}>Barangay</Text>
                   <View style={styles.pickerContainer}>
-                    <Picker
-                        selectedValue={selectedBarangay}
-                        onValueChange={(itemValue) => {
-                          setSelectedBarangay(itemValue);
-                          handleAddressSelect(); // Trigger the function
-                        }}                      
-                      style={styles.picker}
-                    >
-                       {Object.entries(barangayLookup)
+                  <Picker
+                    selectedValue={selectedBarangay}
+                    onValueChange={(itemValue) => setSelectedBarangay(itemValue)}
+                    style={styles.picker}
+                  >
+                    {/* Placeholder option to reset selection */}
+                    <Picker.Item label="Choose an address" value="placeholder" color="gray" />
+                    
+                    {/* Map through the barangayLookup for other options */}
+                    {Object.entries(barangayLookup)
                       .sort((a, b) => a[1].localeCompare(b[1])) // Sort alphabetically by name
                       .map(([code, name]) => (
                         <Picker.Item key={code} label={name} value={code} />
                       ))}
-                    </Picker>
+                  </Picker>  
                   </View>
                   <View style={styles.buttonaddress}> 
                   <CustomButton title="Confirm Address" handlePress={handleAddressSelect} 
@@ -371,13 +394,7 @@ const handleAddressSelect = () => {
           isLoading={isSubmitting}
           setIsLoading={function (loading: boolean): void {} }
         />
-         {showAlert && (
-        <CustomAlert
-          message="Account Created!"
-          duration={3000}
-          onDismiss={() => setShowAlert(false)}
-        />
-      )}    
+          
         <View style={styles.Ask}>
           <Text style={styles.asktext}>Already Have an Account?</Text>
           <Link href='/login' style={styles.link}>Sign In</Link>
@@ -395,6 +412,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     alignItems: 'center',
+  },
+  numbercontainer: {
+    // margin: 20,
+    // height: 40,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    // overflow: 'hidden', // Ensure the border wraps around both inputs
+    // backgroundColor: '#f5f5f5',
+  },
+  numberinput: {
+    flex: 1,
+    // padding: 10,
+    // paddingLeft: 30, // Add padding to prevent text from overlapping the country code
+    fontSize: 16,
+  },
+  numberinputplaceholder: {
+    paddingLeft: 23, // Adjust the padding value as needed
+    fontSize: 16, // Adjust the font size as needed
+  },
+  countryCodeContainer: {
+    marginTop: 26,
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    // backgroundColor: '#f5f5f5', // Background color to match the input
+    zIndex: 1, // Ensure it stays above the input
+  },
+  countryCode: {
+    fontSize: 16,
+    width: 30, // Fixed width to ensure consistent layout
+    textAlign: 'center', // Center the text
+    color: '#1F1F1F', // Adjust based on your theme
   },
   logoContainer: {
     width: 145,
@@ -491,6 +541,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular', // Adjust based on your font family
     fontSize: 16, // Adjust as needed
   },
+  placeholderaddress: {
+    color: '#8888',
+  },  
   placeholder: {
     textDecorationColor: '#8888',
   },

@@ -1,89 +1,187 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, TextInput, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, ActivityIndicator} from "react-native";
 import { Picker } from '@react-native-picker/picker';
 import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Slider from "@react-native-community/slider";
+// import RangeSlider from 'rn-range-slider';
 import { useRouter } from 'expo-router';
 import { icons } from "../../constants";
+import { FontAwesome } from '@expo/vector-icons';
 
 import * as FileSystem from 'expo-file-system';
+import ProductDetails from '../ProductDetails'; 
 
 interface Barangay {
   code: string;
   name: string;
 }
 
-const cacheImage = async (uri) => {
-  const filename = uri.split('/').pop();
-  const fileUri = `${FileSystem.documentDirectory}${filename}`;
-  const info = await FileSystem.getInfoAsync(fileUri);
 
-  if (info.exists) {
-    return fileUri; // Return cached image URI
-  } else {
-    const response = await FileSystem.downloadAsync(uri, fileUri);
-    return response.uri; // Return newly downloaded image URI
-  }
-};
 const ProductImage = React.memo(({ imageUri }: { imageUri: string }) => {
   return <Image source={{ uri: imageUri }} style={styles.productImage} />;
 });
 
-const ProductItem = React.memo(({ item, handleViewDetails }) => {
-  // console.log('sorten item',item)
-  const [imageUri, setImageUri] = useState(null);
+interface ProductItemProps {
+  item: {
+    id: string;
+    image: string;
+    title: string;
+    description: string;
+    price: string;
+    locate: string;
+    created_at: string;
+    averageRating: number;
+    ratings: any[];
+  };
+  handleViewDetails: (item: any) => void;
+}
+
+const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) => {
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const imageCache: { [key: string]: string } = {}; // In-memory cache for image URIs
 
   useEffect(() => {
     const loadImage = async () => {
       const uri = `http://10.0.2.2:8000/storage/product/images/${item.image}`;
-      setImageUri(await cacheImage(uri));
+      setLoading(true);
+      setError(false);
+
+      try {
+        // Check if URI is already cached
+        if (imageCache[uri]) {
+          setImageUri(imageCache[uri]);
+        } else {
+          const filename = uri.split('/').pop();
+          const fileUri = `${FileSystem.documentDirectory}${filename}`;
+          const info = await FileSystem.getInfoAsync(fileUri);
+
+          if (info.exists) {
+            imageCache[uri] = fileUri;
+            setImageUri(fileUri);
+          } else {
+            // Download the image if it isn't locally available
+            const response = await FileSystem.downloadAsync(uri, fileUri);
+            imageCache[uri] = response.uri;
+            setImageUri(response.uri);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading image:", e);
+        setError(true); // Set error state if download fails
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadImage();
-  }, [item.image]);
+  }, [item.image]); // Reload image if `item.image` changes
 
-  return (
+
+  if (loading) {
+    return <ActivityIndicator size="large" color="#0000ff" />;
+  }
+
+  if (error) {
+    return <Text style={{ color: 'red' }}>Failed to load image</Text>;
+  }
+
+   // Skeleton Loader Placeholder
+   const skeletonLoader = (
+    <View style={styles.skeletonContainer}>
+      <View style={styles.skeletonImage} />
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonDescription} />
+      <View style={styles.skeletonPrice} />
+      <View style={styles.skeletonLocation} />
+      <View style={styles.skeletonStars} />
+    </View>
+  );
+
+   // Placeholder for the image when loading
+   const imagePlaceholder = (
+    <View style={styles.imagePlaceholder}>
+      <ActivityIndicator size="large" color="#0000ff" />
+    </View>
+  );
+
+  const productContent = (
     <TouchableOpacity onPress={() => handleViewDetails(item)}>
       <View style={styles.productItem}>
+        <Text style={styles.productTitle}>{item.title}</Text>
+
         <View style={styles.imagecontainer}>
-        {imageUri ? (
-         <ProductImage imageUri={imageUri} />
-        ) : (
-          <ActivityIndicator size="small" color="#0000ff" />
-        )}</View>
+          {loading || !imageUri ? imagePlaceholder : <ProductImage imageUri={imageUri} />}
+        </View>
+
+
         <View style={styles.productdetailscontainer}>
-          <Text style={styles.productTitle}>{item.title}</Text>
-          <Text style={styles.productDescription}>Description: {item.description}</Text>
-          <Text style={styles.productDescription}>Located: {item.locate}</Text>
-          <Text style={styles.productDate}>
-            Date Created: {new Date(item.created_at).toLocaleDateString()}
+          <Text style={styles.productDescription} numberOfLines={2} ellipsizeMode="tail">
+            {item.description}
           </Text>
+          <Text style={styles.productPrice}>P{item.price}</Text>
+          <Text style={styles.productLocation}>{item.locate}</Text>        
+          <View style={styles.stars}>
+          {[...Array(5)].map((_, index) => {
+            const stars = index + 1; // 1 to 5
+            return (
+              <FontAwesome
+                key={stars}
+                name={stars <= Math.round(item.averageRating) ? 'star' : 'star-o'}
+                size={22}
+                color={stars <= Math.round(item.averageRating) ? '#FFC107' : '#E0E0E0'}
+              />
+            );
+          })}
+          <Text style={styles.averageRatingText}>
+            {typeof item.averageRating === 'number' && !isNaN(item.averageRating)
+              ? item.averageRating.toFixed(1)
+              : '0.0'}
+            {Array.isArray(item.ratings) && item.ratings.length > 0 ? ` (${item.ratings.length})` : ''}
+          </Text>
+        </View>
         </View>
       </View>
     </TouchableOpacity>
   );
+
+  return loading ? skeletonLoader : productContent;
 });
 
+ interface Product {
+    id: string;
+    image: string;
+    title: string;
+    description: string;
+    price: string;
+    locate: string;
+    created_at: string;
+    averageRating: number;
+    ratings: any[];
+  }
 
 const Sell = () => {
-  const [products, setProducts] = useState([]);
+ 
+
+  const [products, setProducts] = useState<Product[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortCriteria, setSortCriteria] = useState("title");
   const [sortOrder, setSortOrder] = useState("desc");
+  const flatListRef = useRef<FlatList<Product>>(null);
   const [filterOption, setFilterOption] = useState("locate");
   const [filterLetters, setFilterLetters] = useState("");
   const [currentDate] = useState(new Date().toLocaleDateString());
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [price, setPrice] = useState(0);
-  const [minValue, setMinValue] = useState(0);
-  const [maxValue, setMaxValue] = useState(100);
+  // const [range, setRange] = useState({ min: 1, max: 1000 });
 
+  const [ratings, setRatings] = useState<any[]>([]);
+  const [averageRating, setAverageRating] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const categories = ["Fruits", "LiveStock & Poultry", "Fisheries", "Vegetable", "Crops"];
   const navigation = useNavigation();
@@ -128,93 +226,210 @@ const Sell = () => {
       }, {} as { [key: string]: string });
     };
 
-    // save the new data to asyncstorage for a more faster render
-    const updateAsyncStorage = async (newData) => {
-      try {
-        // Fetch current data from AsyncStorage
-        const existingData = await AsyncStorage.getItem('products');
-        let currentData = existingData ? JSON.parse(existingData) : [];
     
-        // Create a map of current data for quick lookup
-        const currentDataMap = new Map(currentData.map(item => [item.id, item]));
-    
-        // Update existing entries and add new ones
-        newData.forEach(newItem => {
-          currentDataMap.set(newItem.id, newItem);
-        });
-    
-        // Convert map back to array
-        const updatedData = Array.from(currentDataMap.values());
-    
-        // Save updated data to AsyncStorage
-        await AsyncStorage.setItem('products', JSON.stringify(updatedData));
-        console.log('AsyncStorage updated successfully.');
-      } catch (error) {
-        console.error('Failed to update AsyncStorage:', error);
-      }
-    };
+useEffect(() => { 
+  renderProduct(); 
+}, []);
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  
+// Retrieve product data from AsyncStorage and update UI state
+const renderProduct = useCallback(async () => {
+  try {
+    const existingData = await AsyncStorage.getItem('products');
+    const storedProducts = existingData ? JSON.parse(existingData) : [];
 
-  // fetch product from the server
-  const fetchProducts = async () => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) {
-        console.error('No auth token found');
-        return;
-      }
-      const response = await axios.get(`http://10.0.2.2:8000/api/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      const enhancedProducts = response.data.map((product: any) => ({
-        ...product,
-      }));
-      setProducts(enhancedProducts);
-      updateAsyncStorage(enhancedProducts);
-      setTotalProducts(enhancedProducts.length);
-      // console.log("Fetched Products Data:", enhancedProducts);
-    } catch (error) {
-      console.error("Error fetching products:", error);
+    // Set products and total count in UI state
+    setProducts(storedProducts as Product[]);
+    setTotalProducts(storedProducts.length);
+
+    // Extract ratings and calculate average rating
+    const extractedRatings = storedProducts.map((product: { ratings: any; averageRating: any; }) => ({
+      ratings: product.ratings || [],
+      averageRating: product.averageRating || 0,
+    }));
+
+    setRatings(extractedRatings.map((rating: any) => rating.ratings).flat());
+    setAverageRating(
+      extractedRatings.reduce((acc: any, curr: { averageRating: any; }) => acc + curr.averageRating, 0) / extractedRatings.length
+    );
+
+    console.log('Product data rendered successfully.');
+  } catch (error) {
+    console.error('Failed to render product data:', error);
+  }
+}, []);
+
+const isFetching = useRef(false); // Flag for main fetch status
+const isFetchingRatings = useRef(false); // Flag for ratings fetch status
+const lastFetchTime = useRef(0);
+const debounceDelay = 10000; // Set a 10-second delay between fetches
+
+const logNavigationState = async () => {
+  const currentTime = Date.now();
+  if (currentTime - lastFetchTime.current > debounceDelay && !isFetching.current) {
+    console.log('screen change');
+    isFetching.current = true; // Set flag to indicate a fetch is in progress
+    await fetchProducts(); // Call main fetch logic
+    lastFetchTime.current = currentTime;
+    isFetching.current = false; // Reset flag after fetch completes
+  } else {
+    console.log('Fetch skipped to prevent 429');
+  }
+};
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    if (!isFetching.current) { // Ensure no ongoing fetch before triggering another
+      fetchProducts(); // Fetch products from the server at intervals
     }
-  };
+  }, 10 * 60 * 1000); // 10 minutes in milliseconds
+
+  return () => clearInterval(interval); // Clear the interval on component unmount
+}, []);
+
+useEffect(() => {
+  const unsubscribe = navigation.addListener('focus', logNavigationState);
+  return unsubscribe;
+}, [navigation]);
+
+const onRefresh = useCallback(async () => {
+  if (!isFetching.current) { // Check if a fetch is already in progress
+    setIsRefreshing(true);
+    isFetching.current = true;
+    await fetchProducts(); // Trigger the fetch for products
+    setIsRefreshing(false);
+    isFetching.current = false; // Reset flag after refresh completes
+  }
+}, []);
+
+const fetchProducts = async () => {
+  try {
+    const token = await AsyncStorage.getItem('authToken');
+    if (!token) {
+      console.error('No auth token found');
+      return;
+    }
+
+    const response = await axios.get('http://10.0.2.2:8000/api/products', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    let products = response.data;
+
+    // Enhance products with ratings if the ratings are not already fetched
+    for (let i = 0; i < products.length; i++) {
+      const productWithRating = await fetchProductsRatings(products[i].id); // Fetch ratings for each product
+      products[i] = { ...products[i], ...productWithRating }; // Merge the ratings with the product data
+    }
+
+    // Now you can use the products with ratings
+    await updateAsyncStorage(products); // Update AsyncStorage with the new products
+    console.log('Fetched products with ratings:');
+  } catch (error) {
+    console.error("Error fetching products:", error);
+  }
+};
+
+// Update AsyncStorage without updating the UI state directly
+const updateAsyncStorage = async (newData: any[]) => {
+  try {
+    // Fetch current data from AsyncStorage
+    const existingData = await AsyncStorage.getItem('products');
+    let currentData = existingData ? JSON.parse(existingData) : [];
+
+    // Create a map of current data for quick lookup
+    const currentDataMap = new Map(currentData.map((item: any) => [item.id, item]));
+
+    // Create a Set of new product IDs for easy comparison
+    const newProductIds = new Set(newData.map(item => item.id));
+
+    // Update existing entries and add new ones
+    newData.forEach(newItem => {
+      currentDataMap.set(newItem.id, newItem);
+    });
+
+    // Remove items from currentDataMap that are not in newData
+    for (let id of currentDataMap.keys()) {
+      if (!newProductIds.has(id)) {
+        currentDataMap.delete(id);
+      }
+    }
+
+    // Convert map back to array
+    const updatedData = Array.from(currentDataMap.values());
+
+    // Save updated data to AsyncStorage
+    await AsyncStorage.setItem('products', JSON.stringify(updatedData));
+
+    console.log('AsyncStorage updated successfully.');
+    await renderProduct(); // Update UI state after AsyncStorage update
+  } catch (error) {
+    console.error('Failed to update AsyncStorage:', error);
+  }
+}; 
+  
+const fetchProductsRatings = async (productId: any) => {
+  try {
+    if (isFetchingRatings.current) {
+      console.log('Ratings fetch already in progress for productId:', productId);
+      return {}; // Skip if the ratings fetch is already in progress
+    }
+
+    isFetchingRatings.current = true; // Set flag to indicate a ratings fetch is in progress
+
+    const token = await AsyncStorage.getItem('authToken');
+    if (!token) {
+      console.error('No auth token found for ratings');
+      isFetchingRatings.current = false; // Reset flag
+      return {};
+    }
+
+    const ratingsResponse = await axios.get(`http://10.0.2.2:8000/api/productrating/${productId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const ratings = ratingsResponse.data.ratings || []; // Default to an empty array if undefined
+    const averageRating = ratingsResponse.data.averageRating || 0;
+
+    isFetchingRatings.current = false; // Reset flag after ratings fetch completes
+
+    // Ensure the ratings are an array and handle safely
+    if (!Array.isArray(ratings)) {
+      console.error('Invalid ratings format for productId:', productId);
+      return {
+        ratings: [],
+        averageRating: 0
+      };
+    }
+
+    return {
+      ratings,
+      averageRating
+    };
+  } catch (error) {
+    console.error("Error fetching product ratings:", error);
+    isFetchingRatings.current = false; // Reset flag if error occurs
+    return { ratings: [], averageRating: 0 }; // Return empty ratings and 0 average if error occurs
+  }
+};
+
+  
 
 
 
   const handleViewDetails = (product: any) => {
-    // console.log("Fetched Products:", product);
-    // @ts-ignore
-    navigation.navigate('ProductDetails', { product: JSON.stringify(product) });
+    console.log('Viewing product details:', product.id);
+    navigation.navigate('ProductDetails', { productId: product.id });
   };
 
-  //debugs codes
-  const logNavigationState = () => {
-    // console.log(navigation.getState());
-    console.log('screen change');
-    fetchProducts();
-};
-
-useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', logNavigationState);
-    return unsubscribe;
-}, [navigation]);
-
-  const onRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    await fetchProducts();
-    setIsRefreshing(false);
-  }, []);
-
-  const handleSearchChange = (text) => {
+  const handleSearchChange = (text: string) => {
     setSearchQuery(text);
   };
-  
 
- 
  // Function to filter and sort products
 const filterAndSortProducts = () => {
   // Filter based on search query and custom filter options
@@ -237,7 +452,7 @@ const filterAndSortProducts = () => {
     .sort((a, b) => {
       const dateA = new Date(a.created_at);
       const dateB = new Date(b.created_at);
-      return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+      return sortOrder === "desc" ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
     });
 
   return sortedProducts; // Return the sorted products
@@ -292,21 +507,45 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
   setModalVisible(false);
   setSelectedBarangay('');
   setSelectedCategory('');
+
+    // Scroll the FlatList to the top after state updates
+    if (flatListRef.current) {
+      flatListRef.current.scrollToOffset({ animated: true, offset: 0 });
+    }
 };
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item }: { item: Product }) => (
       <ProductItem item={item} handleViewDetails={handleViewDetails} />
     );
+
+    // for debugging purpose only
+    // const removeProductsData = async () => {
+    //   try {
+    //     await AsyncStorage.removeItem('products');
+    //     console.log('Products data removed from AsyncStorage.');
+        
+    //     // Verify that the data has been removed
+    //     const data = await AsyncStorage.getItem('products');
+    //     if (data === null) {
+    //       console.log('Verification successful: Products data is not present in AsyncStorage.');
+    //     } else {
+    //       console.log('Verification failed: Products data is still present in AsyncStorage.', data);
+    //     }
+    //   } catch (error) {
+    //     console.error('Failed to remove products data from AsyncStorage:', error);
+    //   }
+    // };
 
   return (
     <View style={styles.container}>
       {selectedProduct ? (
+        // error on product no idea how to resolve 
         <ProductDetails product={selectedProduct} onBack={() => setSelectedProduct(null)} />
       ) : (
         <>
           <View style={styles.dashboard}>
             {/* button to post navigate you to createsell page */}
           <TouchableOpacity
-            onPress={() => navigation.navigate("createsell")}
+            onPress={() => navigation.navigate("createsell" as never)}
             style={styles.buttonContainer}
         >
             <Text style={styles.buttonText}>
@@ -317,6 +556,17 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
             /> 
               Post</Text>
         </TouchableOpacity>
+        {/* for debugging pupose only */}
+        {/* <TouchableOpacity
+            onPress={removeProductsData}
+        >       
+            <Text>  clearasyncstorage </Text>
+        </TouchableOpacity> */}
+        {/* <TouchableOpacity
+            onPress={() => navigation.navigate("Rating")}
+        >       
+            <Text>  testpage </Text>
+        </TouchableOpacity> */}
 
             <Text style={styles.totalProducts}>Total Post: {totalProducts}</Text>
           </View>
@@ -371,33 +621,22 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
           </Picker>
       </View>
 
-      <View style={styles.slidercontainer}>
+      {/* <View style={styles.slidercontainer}>
       <Text>Enter Price:</Text>
-      <Text>Minimum Price: {minValue}</Text>
-      <Slider
-        style={{width: 300, height: 40}}
-        minimumValue={0}
-        maximumValue={maxValue}
-        value={minValue}
-        onValueChange={(value) => {
-          if (value <= maxValue) {
-            setMinValue(value);
-          }
-        }}
+      <Text>Minimum Price: {range.min}</Text>
+      <Text>Maximum Price: {range.max}</Text>
+      <RangeSlider
+        min={1}
+        max={1000}
+        fromValue={range.min}
+        toValue={range.max}
+        onValueChanged={(min, max) => setRange({ min, max })}
+        styleSize='small'
+        showRangeLabels={false}
+        showValueLabels={true}
+        showDoubleValue={true}
       />
-      <Text>Maximum Price: {maxValue}</Text>
-      <Slider
-        style={{width: 300, height: 40}}
-        minimumValue={minValue}
-        maximumValue={200}  // Adjust as needed
-        value={maxValue}
-        onValueChange={(value) => {
-          if (value >= minValue) {
-            setMaxValue(value);
-          }
-        }}
-      />
-    </View>
+    </View> */}
       <TouchableOpacity onPress={() => applyBarangayFilter(selectedBarangay, selectedCategory)}>
         <Text style={styles.closeButton}>Enter</Text>
       </TouchableOpacity>
@@ -411,6 +650,7 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
 </>
           </View>       
           <FlatList
+            ref={flatListRef}
             data={filteredProducts}
             renderItem={renderItem}
             keyExtractor={(item) => item.id.toString()}
@@ -422,6 +662,7 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
                 onRefresh={onRefresh}
               />
             }
+            numColumns={2}
           />
         </>
       )}
@@ -557,7 +798,6 @@ const styles = StyleSheet.create({
     marginTop:30,
     marginBottom: 30,
     borderColor: 'black',
-
   },
 
   input: {
@@ -603,9 +843,54 @@ const styles = StyleSheet.create({
   inventory: {
     paddingBottom: 20,
   },
-  productItem: {
-    flexDirection: "row",
+  skeletonContainer: {
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 15,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  skeletonImage: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#ccc',
+    marginBottom: 15,
+  },
+  skeletonTitle: {
+    width: '60%',
+    height: 20,
+    backgroundColor: '#ccc',
     marginBottom: 10,
+  },
+  skeletonDescription: {
+    width: '80%',
+    height: 14,
+    backgroundColor: '#ccc',
+    marginBottom: 10,
+  },
+  skeletonPrice: {
+    width: '40%',
+    height: 20,
+    backgroundColor: '#ccc',
+    marginBottom: 10,
+  },
+  skeletonLocation: {
+    width: '50%',
+    height: 14,
+    backgroundColor: '#ccc',
+    marginBottom: 10,
+  },
+  skeletonStars: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  productItem: {
+    // flexDirection: "row",
+    width: 190,
+    // width: '100%', // Ensure width is not too small
+    marginBottom: 10,
+    marginRight: 10,
     backgroundColor: "#fff",
     padding: 15, // Increase padding for better spacing
     borderRadius: 10, // More rounded corners
@@ -613,22 +898,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2, // Slightly increase shadow opacity for more depth
     shadowRadius: 10, // Increase shadow radius for a softer look
     shadowOffset: { width: 0, height: 5 }, // Higher shadow offset for elevation
-    alignItems: 'center',
+    // alignItems: 'center',
     elevation: 5, // Add elevation for Android shadow
   },
   productdetailscontainer:{
-    width: '60%',  // Ensure width is not too small
-    height: 150, 
+    width: '100%',  // Ensure width is not too small
+    height: '100%', // Ensure height is not too small
     marginRight: 5,
+    flex: 1,
   },
   imagecontainer:{
-    width: 150,  // Ensure width is not too small
-    height: 150, 
+    width: 160,  // Ensure width is not too small
+    height: 180, 
+    marginRight: 5,
+  },
+  imagePlaceholder: {
+    width: 160,  // Ensure width is not too small
+    height: 180, 
     marginRight: 5,
   },
   productImage: {
-    width: 150,  // Ensure width is not too small
-    height: 150, // Ensure height is not too small
+    width: '100%',  // Ensure width is not too small
+    height: '100%', // Ensure height is not too small
     resizeMode: 'cover',
     borderRadius: 5, // Optional: rounded corners
     marginRight: 10, // Space between image and text
@@ -636,15 +927,42 @@ const styles = StyleSheet.create({
   },
   productTitle: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: 'bold',
+    color: '#34495e',
   },
   productDescription: {
     fontSize: 14,
-    marginTop: 5,
+    height: 40,
+    color: '#7f8c8d',
+    marginTop: 4,
+    width: 'auto',
+    flexShrink: 1,
+  },
+  productPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#16a085',
+    marginTop: 4,
+  },
+  productLocation: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginTop: 4,
   },
   productDate: {
     fontSize: 12,
-    marginTop: 5,
-    color: "#777",
+    color: '#777',
+    marginTop: 6,
   },
+  stars: {
+    flexDirection: 'row',
+    alignItems: 'center',                // Center stars vertically
+  },
+  averageRatingText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 10,                      // Space between stars and rating text
+    alignSelf: 'center',                 // Center the text vertically with stars
+},
 });
