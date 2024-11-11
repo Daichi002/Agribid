@@ -9,17 +9,16 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  Button,
 } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
 import * as ImageManipulator from 'expo-image-manipulator';
-import DropDownPicker from 'react-native-dropdown-picker';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Picker } from '@react-native-picker/picker';
-import CustomAlert from '../components/customeAlert';
+import { useAlert } from '../components/AlertContext';
+
 
 interface Barangay {
   code: string;
@@ -34,7 +33,14 @@ interface User {
   // address: string;
 }
 
-const ImagePickerModal = ({ visible , onChooseFromStorage, onTakePhoto, onClose }) => {
+interface ImagePickerModalProps {
+  visible: boolean;
+  onChooseFromStorage: () => void;
+  onTakePhoto: () => void;
+  onClose: () => void;
+}
+
+const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ visible, onChooseFromStorage, onTakePhoto, onClose }) => {
   const takestorage = () => {
     onChooseFromStorage();
     onClose();
@@ -71,7 +77,6 @@ const Createsell = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [open, setOpen] = useState(false);
   const [Units, setUnits] = useState('kg');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [imageUri, setImageUri] = useState(null);
@@ -80,7 +85,7 @@ const Createsell = () => {
   const [price, setPrice] = useState<string>("");
   const [address, setAddress] = useState("");
   const [image, setImage] = useState<string | null>(null);
-  const [showAlert, setShowAlert] = useState(false);
+  const { showAlert } = useAlert();
   const [errors, setErrors] = useState({
     image: '',
     title: '',
@@ -180,7 +185,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   }
 }, [currentUser, barangayLookup]);
 
-  const regex = /^\d{0,7}(\.\d{0,2})?$/;
+ const regex = /^\d{0,7}(\.\d{0,2})?$/;
 
   const handleChangeText = (text: string) => {
     if (regex.test(text)) {
@@ -191,12 +196,12 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
     if (regex.test(text)) {
       setQuantity(text);
     }
-  };
+  }; 
 
   const handleImagePicker = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsEditing: false,
       aspect: [4, 3],
       quality: 1,
     });
@@ -219,7 +224,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   const handleTakePhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsEditing: false,
       aspect: [4, 3],
       quality: 1,
     });
@@ -254,11 +259,11 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   };
   
   const validateForm = () => {
-    const newErrors = { image: '', title: '', quantity: '', Units: '', price: '', locate: '' };
+    const newErrors = { image: '', title: '', quantity: '', units: '', price: '', locate: '' };
     if (!image) newErrors.image = 'Image is required';
     if (!category) newErrors.title = 'Category is required';
     if (!quantity) newErrors.quantity = 'Quantity is required';
-    if (!Units) newErrors.Units = 'Units is required';
+    if (!Units) newErrors.units = 'Units is required';
     if (!price) newErrors.price = 'Price is required';
     if (!address) newErrors.locate = 'Location is required';
     return newErrors;
@@ -267,82 +272,87 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   const createProduct = async () => {
     const newErrors = validateForm();
     setErrors(newErrors);
-
+  
     if (Object.values(newErrors).every((error) => !error)) {
-        try {
-            const token = await AsyncStorage.getItem('authToken');
-            if (!token) throw new Error("Authentication token not found.");
-
-            const formData = new FormData();
-
-            // Check if the image is selected
-            if (image) {
-                try {
-                    // Fetch the image from the URI
-                    const response = await fetch(image);
-                    console.log('Fetch response status:', response.status); // Log fetch response status
-
-                    // Check if the response is OK (status 200-299)
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch the image');
-                    }
-
-                    const blob = await response.blob(); // Convert the response to a Blob
-                    // console.log('Fetched image blob:', blob); // Log the fetched blob
-
-                    // Append the Blob directly to FormData with correct metadata
-                    formData.append('image', {
-                        uri: image,
-                        type: 'image/jpeg', // Ensure the correct MIME type
-                        name: 'photo.jpg'
-                    } as any);
-                } catch (error) {
-                    console.error('Error fetching the image:', error);
-                    Alert.alert("Error", "Could not process the image. Please try again.");
-                    return; // Exit the function if there's an error fetching the image
-                }
-            } else {
-                console.error('Image URI is null or undefined.');
-                // Alert.alert('Error', 'No image selected. Please select an image before submitting.'); // Alert the user
-                return; // Exit the function if no image is selected
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (!token) throw new Error("Authentication token not found.");
+  
+        const formData = new FormData();
+  
+        // Check if the image is selected
+        if (image) {
+          try {
+            // Fetch the image from the URI
+            const response = await fetch(image);
+            console.log('Fetch response status:', response.status); // Log fetch response status
+  
+            // Check if the response is OK (status 200-299)
+            if (!response.ok) {
+              throw new Error('Failed to fetch the image');
             }
-
-            // Append other form data
-            formData.append('title', title);
-            formData.append('description', description || title);
-            formData.append('quantity', quantity);
-            formData.append('unit', Units)
-            formData.append('price', price);
-            formData.append('locate', address);
-            formData.append('created_at', new Date().toISOString()); // Use ISO format for consistency
-
-            console.log('FormData:', JSON.stringify(formData)); // Log FormData for debugging
-
-            // Make the API call to store the product
-            const response = await axios.post("http://10.0.2.2:8000/api/store", formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${token}`,
-                },
-                timeout: 10000,
-            });
-
-            // Handle successful response
-            // Alert.alert("Success", response.data.message);
-            navigation.goBack();
-        } catch (error) {
-          if (axios.isAxiosError(error)) {
-            // Axios-specific error handling
-            console.error('Axios Error:', error.response?.data || error.message);
-            Alert.alert("Error", error.response?.data?.message || error.message || "An unknown error occurred");
-          } else {
-            // General error handling
-            console.error('General Error:', error);
-            Alert.alert("Error", "An unexpected error occurred");
+  
+            const blob = await response.blob(); // Convert the response to a Blob
+            console.log('Fetched image blob:', blob); // Log the fetched blob
+  
+            // Check blob size and type to ensure it is a valid image
+            if (!blob.size || !blob.type.startsWith('image/')) {
+              throw new Error('Invalid image data');
+            }
+  
+            // Append the Blob directly to FormData with correct metadata
+            formData.append('image', {
+              uri: image,
+              type: 'image/jpeg', // Ensure the correct MIME type
+              name: 'photo.jpg'
+            } as any);
+          } catch (error) {
+            console.error('Error fetching the image:', error);
+            Alert.alert("Error", "Could not process the image. Please try again.");
+            return; // Exit the function if there's an error fetching the image
           }
-        }        
+        } else {
+          console.error('Image URI is null or undefined.');
+          return; // Exit the function if no image is selected
+        }
+  
+        // Append other form data
+        formData.append('title', title);
+        formData.append('description', description || title);
+        formData.append('quantity', quantity);
+        formData.append('unit', Units);
+        formData.append('price', price);
+        formData.append('locate', address);
+        formData.append('created_at', new Date().toISOString()); // Use ISO format for consistency
+  
+        console.log('FormData:', JSON.stringify(formData)); // Log FormData for debugging
+  
+        // Make the API call to store the product
+        const response = await axios.post("http://10.0.2.2:8000/api/store", formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+          timeout: 10000,
+        });
+
+        showAlert('Produdct Posted successfully!', 3000);
+  
+        // Handle successful response
+        navigation.goBack();
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          // Axios-specific error handling
+          console.error('Axios Error:', error.response?.data || error.message);
+          Alert.alert("Error", error.response?.data?.message || error.message || "An unknown error occurred");
+        } else {
+          // General error handling
+          console.error('General Error:', error);
+          Alert.alert("Error", "An unexpected error occurred");
+        }
+      }
     }
-};
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -396,7 +406,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
 
           <Text style={styles.label}>Description Optional</Text>
           <TextInput
-            style={[styles.input, { height: 100 }]}
+            style={[styles.descriptioninput, { height: 100 }]}
             multiline
             value={description}
             onChangeText={setDescription}
@@ -470,13 +480,6 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
 
           <TouchableOpacity style={styles.post} onPress={createProduct}>
             <Text style={styles.buttonText}>Post</Text>
-            {showAlert && (
-        <CustomAlert
-          message="Product Created!"
-          duration={3000}
-          onDismiss={() => setShowAlert(false)}
-        />
-      )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -542,6 +545,14 @@ const styles = StyleSheet.create({
   label: {
     fontWeight: 'bold',
     marginBottom: 5,
+  },
+  descriptioninput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 16,
+    textAlignVertical: 'top',
   },
   input: {
     borderWidth: 1,
@@ -641,9 +652,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonGreen: {
-    backgroundColor: '#32CD32',
+    // backgroundColor: '#32CD32',
   },
   buttonRed: {
-    backgroundColor: '#FF6347',
+    // backgroundColor: '#FF6347',
   },
 });

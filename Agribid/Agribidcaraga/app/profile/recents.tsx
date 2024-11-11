@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Image, FlatList, RefreshControl, TouchableOpacity, Alert, SafeAreaView, Modal } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+import { useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { icons } from "../../constants";
 import { useRouter } from 'expo-router';
 
-const cacheImage = async (uri) => {
+const cacheImage = async (uri: string) => {
   const filename = uri.split('/').pop();
   const fileUri = `${FileSystem.documentDirectory}${filename}`;
   const info = await FileSystem.getInfoAsync(fileUri);
@@ -20,9 +21,25 @@ const cacheImage = async (uri) => {
   }
 };
 
-const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }) => {
-  const [imageUri, setImageUri] = useState(null);
+interface ProductItemProps {
+  item: {
+    id: number;
+    image: string;
+    title: string;
+    description: string;
+    price: string;
+    locate: string;
+    created_at: string;
+  };
+  handleViewDetails: (item: any) => void;
+  handleDelete: (item: { id: number; image: string; title: string; description: string; price: string; locate: string; created_at: string; }) => void;
+}
+
+const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }: ProductItemProps) => {
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // console.log('ProductItem rendering:', item);
 
   useEffect(() => {
     const loadImage = async () => {
@@ -36,31 +53,42 @@ const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }) => {
   }, [item.image]);
 
   return (
-    <TouchableOpacity onPress={() => handleViewDetails(item)}>
+    <TouchableOpacity  onPress={() => handleViewDetails(item)}>
       <View style={styles.productItem}>
         {loading ? (
           <Text>Loading...</Text>
         ) : (
-          <Image source={{ uri: imageUri }} style={styles.productImage} />
+          imageUri ? <Image source={{ uri: imageUri }} style={styles.productImage} /> : null
         )}
         <View style={styles.productDetails}>
           <Text style={styles.productTitle}>{item.title}</Text>
           <Text style={styles.productDescription}>Description: {item.description}</Text>
           <Text style={styles.productDate}>Date Created: {new Date(item.created_at).toLocaleDateString()}</Text>
         </View>
-          <TouchableOpacity style={styles.buttonContainer} onPress={() => handleDelete(item.id)}>
-            <Image source={icons.garbage} style={styles.icon} />
-          </TouchableOpacity>
-        
+        <TouchableOpacity style={styles.buttonContainer} onPress={() => handleDelete(item)}>
+          <Image source={icons.garbage} style={styles.icon} />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 });
 
-const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCount }) => {
-  const [imageUri, setImageUri] = useState(null);
+interface RenderProductMessagesProps {
+  item: {
+    image: string;
+    title: string;
+    description: string;
+    created_at: string;
+    id: number;
+  };
+  handleViewMessage: (id: number) => void;
+  sessionCount: number;
+}
+
+const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCount }: RenderProductMessagesProps) => {
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
- 
+  // console.log('RenderProductMessages rendering:', item);
 
   useEffect(() => {
     const loadImage = async () => {
@@ -79,19 +107,19 @@ const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCoun
         {loading ? (
           <Text>Loading...</Text>
         ) : (
-          <Image source={{ uri: imageUri }} style={styles.productImage} />
+          imageUri ? <Image source={{ uri: imageUri }} style={styles.productImage} /> : null
         )}
         <View style={styles.productDetails}>
           <Text style={styles.productTitle}>{item.title}</Text>
           {sessionCount ? (
-              <Text style={styles.productTitle}>
-                <Image 
-                  source={icons.contact} 
-                  style={styles.icon}
-                  resizeMode="contain" // Ensure the image fits within the circular container
-                /> 
-                Messages: {sessionCount}</Text>
-            ) : null}
+            <Text style={styles.productTitle}>
+              <Image 
+                source={icons.contact} 
+                style={styles.icon}
+                resizeMode="contain" // Ensure the image fits within the circular container
+              /> 
+              Messages: {sessionCount}</Text>
+          ) : null}
           <Text style={styles.productDate}>Date Created: {new Date(item.created_at).toLocaleDateString()}</Text>
         </View>
       </View>
@@ -100,17 +128,53 @@ const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCoun
 });
 
 const Recents = () => {
-  const [products, setProducts] = useState([]);
-  const [messages, setMessages] = useState([]);
+  interface Product {
+    id: string;
+    image: string;
+    title: string;
+    description: string;
+    price: string;
+    locate: string;
+    created_at: string;
+  }
+  interface ProductMessage {
+    id: string;
+    image: string;
+    title: string;
+    created_at: string;
+  }
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [messages, setMessages] = useState<ProductMessage[]>([]);
   const [messageID, setMessageID] = useState([]);
-  const [messageList, setMessageList] = useState([]);
+  const [messageList, setMessageList] = useState<{ [key: number]: any[] }>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRefreshingMessages, setIsRefreshingMessages] = useState(false);
-  const [sessionCounts, setSessionCounts] = useState(0);
+  const [sessionCounts, setSessionCounts] = useState<{ [key: number]: number }>({});
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation(); 
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedMessages, setSelectedMessages] = useState([]);
+
+  interface Message {
+    product_id: string;
+    sessions: string;
+    receiver_id: string;
+    sender_id: string;
+    sender: {
+      id: number;
+      firstname: string;
+      lastname: string;
+      Address: string;
+      Phonenumber: string;
+      created_at: string;
+      updated_at: string;
+    };
+    text: string;
+    created_at: string;
+    updated_at: string;
+  }
+  
+  const [selectedMessages, setSelectedMessages] = useState<Message[]>([]);
   const isFocused = useIsFocused();
   const router = useRouter();
 
@@ -126,8 +190,9 @@ const Recents = () => {
         },
       });
 
+      // console.log('User products:', response.data);
+
       setProducts(response.data);
-      // console.log('Fetched User Products Data:', response.data);
     } catch (error) {
       console.error('Error fetching user products:', error);
     }
@@ -141,62 +206,58 @@ const Recents = () => {
         console.error('No auth token found');
         return null; // Return null if no token
       }
-  
-      console.log('Fetching user messages...');
+
       const response = await axios.get('http://10.0.2.2:8000/api/user/productmessage', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-  
-      const messageIDs = response.data.map((message) => message.id);
+
+      const messageIDs = response.data.map((message: { id: number }) => message.id);
       setMessages(response.data);
-  
+      // console.log('User messages:', response.data);
       // Save messageIDs to AsyncStorage
       await AsyncStorage.setItem('messageIDs', JSON.stringify(messageIDs));
-      // console.log('Saved Message IDs to AsyncStorage');
-  
-      // console.log('Fetched User Messages Data:', response.data);
-      // console.log('Fetched Message IDs:', messageIDs);
       return messageIDs; // Return the message IDs
     } catch (error) {
-      console.error('Error fetching user messages:', error.response ? error.response.data : error.message);
+      if (axios.isAxiosError(error)) {
+        console.error('Error fetching user messages:', error.response ? error.response.data : error.message);
+      } else {
+        if (error instanceof Error) {
+          console.error('Error fetching user messages:', error.message);
+        } else {
+          console.error('Error fetching user messages:', error);
+        }
+      }
       return null; // Return null in case of error
     }
-  };  
-  
-  
+  };
 
   // message function start here
   // function for message list
 
-  const handleViewMessage = (productId) => {
-    // console.log('Current messageList:', JSON.stringify(messageList, null, 2)); // Check the current state of messageList
-  
+  const handleViewMessage = (productId: number) => {
     if (!messageList || typeof messageList !== 'object') {
       console.error('messageList is not available or not an object.');
       return;
     }
-  
+
     const filteredMessages = messageList[productId];
-  
+
     if (!filteredMessages) {
-      // console.error(`No messages found for productId ${productId}.`);
       setSelectedMessages([]);  // Ensure this is set even if no messages are found
       setModalVisible(true);    // Open the modal even if no messages found
       return;
     }
     
     const sessionMessages = Object.values(filteredMessages);
-    const flattenedMessages = sessionMessages.flat(); // Flatten the array to handle multiple sessions
+    const flattenedMessages = sessionMessages.flat() as Message[]; // Flatten the array to handle multiple sessions
     setSelectedMessages(flattenedMessages);
     setModalVisible(true);  // Open the modal
   };
 
-
-
-  const normalizeKeys = (obj) => {
-    const normalizedObj = {};
+  const normalizeKeys = (obj: { [key: string]: any }) => {
+    const normalizedObj: { [key: string]: any } = {};
     for (const key in obj) {
       if (obj.hasOwnProperty(key)) {
         normalizedObj[key.toLowerCase()] = obj[key];
@@ -205,14 +266,28 @@ const Recents = () => {
     return normalizedObj;
   };
 
-  const formatTime = (datetime) => {
+  const formatTime = (datetime: string | Date) => {
     const date = new Date(datetime);
     const hours = date.getHours();
     const minutes = date.getMinutes();
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
-  const renderMessage = React.memo(({ item }) => {
+  interface MessageItem {
+    first: {
+      id: any;
+      sender: {
+        firstname: string;
+        lastname: string;
+      };
+    };
+    latest: {
+      text: string;
+      created_at: string;
+    };
+  }
+
+  const renderMessage = ({ item }: { item: MessageItem }) => {
     if (!item || !item.first || !item.first.sender || !item.latest) {
       console.error('Invalid message item:', item);
       return null;
@@ -222,9 +297,12 @@ const Recents = () => {
     const latestMessage = item.latest;
     const sender = normalizeKeys(firstMessage.sender);
     const displayName = `${sender.firstname || 'Unknown'} ${sender.lastname || ''}`.trim();
-
-     // Function to check if text is an image URL
-     const isImageUrl = (text) => {
+  
+    // Function to check if text is an image URL
+    const isImageUrl = (text) => {
+      if (!text) {
+        return false; // Return false if text is null or undefined
+      }
       const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
       return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
     };
@@ -235,17 +313,16 @@ const Recents = () => {
           <Text style={styles.senderName}>{displayName || 'Unknown'}</Text>
           <View style={styles.messageRow}>
             <Text style={styles.messageText}>
-            {isImageUrl(latestMessage.text) ? 'Image' : (latestMessage.text || 'No message content')}
-              </Text>
+              {isImageUrl(latestMessage.text) ? 'Image' : (latestMessage.text || 'No message content')}
+            </Text>
             <Text style={styles.messageTime}>
-              .{latestMessage.created_at ? formatTime(latestMessage.created_at) : 'No message content'}
+              {latestMessage.created_at ? formatTime(latestMessage.created_at) : 'No message content'}
             </Text>
           </View>
-
         </View>
       </TouchableOpacity>
     );
-  });
+  };
 
   const loadMessageIDs = async () => {
     try {
@@ -253,7 +330,6 @@ const Recents = () => {
       if (savedMessageIDs) {
         const messageIDs = JSON.parse(savedMessageIDs);
         setMessageID(messageIDs);
-        // console.log('Loaded Message IDs from AsyncStorage:', messageIDs);
         return messageIDs;
       }
     } catch (error) {
@@ -261,19 +337,17 @@ const Recents = () => {
     }
     return await fetchMessages(); // Fallback to fetching if no saved data
   };
-  
-   
-  // message fetch
+
   const fetchMessagelist = async () => {
     setLoading(true); // Start loading
     const productIds = await loadMessageIDs(); // Await loaded or fetched message IDs
-  
+
     if (!productIds || productIds.length === 0) {
       console.log('Fetched productIds is empty, skipping fetchMessagelist');
       setLoading(false); // End loading
       return;
     }
-  
+
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
@@ -281,55 +355,48 @@ const Recents = () => {
         setLoading(false); // End loading
         return;
       }
-  
-      const fetchMessagesForProduct = async (productId) => {
+
+      const fetchMessagesForProduct = async (productId: number) => {
         const response = await axios.get('http://10.0.2.2:8000/api/messageslist', {
           params: { productId },
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
         });
-  
+
         if (!response.data || response.data.length === 0) {
-          // console.warn('Received empty data for productId', productId);
           return [];
         }
-  
-        // console.log('Received data for productId', productId, ':', JSON.stringify(response.data, null, 2));
-  
-        return response.data.map(session => ({
+
+        return response.data.map((session: any) => ({
           productId: productId,
           sessions: session.sessions,
           first: session.first,
           latest: session.latest,
         }));
       };
-  
-      const allMessagesByProduct = {};
+
+      const allMessagesByProduct: { [key: number]: any[] } = {};
       for (const productId of productIds) {
         if (!productId) {
-          console.warn('Empty productId found, skipping...');
           continue;
         }
-        // console.log('Processing productId:', productId); // Log each productId
         const messages = await fetchMessagesForProduct(productId);
         if (messages.length) {
           if (!allMessagesByProduct[productId]) {
             allMessagesByProduct[productId] = [];
           }
-          messages.forEach(message => {
+          messages.forEach((message: any) => {
             allMessagesByProduct[productId].push(message);
           });
         }
       }
-  
-      // console.log('All messages by product:', JSON.stringify(allMessagesByProduct, null, 2)); // Log allMessagesByProduct
 
-      const sessionCounts = Object.keys(allMessagesByProduct).reduce((acc, productId) => {
-        acc[productId] = Object.keys(allMessagesByProduct[productId]).length;
+      const sessionCounts = Object.keys(allMessagesByProduct).reduce((acc: { [key: number]: number }, productId: string) => {
+        const id = parseInt(productId, 10);
+        acc[id] = Object.keys(allMessagesByProduct[id]).length;
         return acc;
       }, {});
       setSessionCounts(sessionCounts);
-      // console.log('Session counts:', sessionCounts);
       setMessageList(allMessagesByProduct);
       await updateMessagesInStorage(productIds, allMessagesByProduct); // Ensure this awaits for completion
       setLoading(false); // End loading
@@ -340,39 +407,38 @@ const Recents = () => {
     }
   };
 
-  const updateMessagesInStorage = async (productIds, newMessages) => {
+  const updateMessagesInStorage = async (productIds: number[], newMessages: { [key: number]: any[] }) => {
     try {
       const storageKey = `messages_${productIds.join('_')}`;
       const existingMessages = await AsyncStorage.getItem(storageKey);
       let currentMessages = existingMessages ? JSON.parse(existingMessages) : [];
-  
+
       // Ensure currentMessages is an array
       if (!Array.isArray(currentMessages)) {
         currentMessages = [];
       }
-  
+
       const allNewMessages = Object.values(newMessages).flat();
-  
+
       // Create a map for current messages
-      const messageMap = new Map(currentMessages.map(msg => [msg.id, msg]));
-  
+      const messageMap = new Map(currentMessages.map((msg: any) => [msg.id, msg]));
+
       // Add new messages to the map
       allNewMessages.forEach(msg => messageMap.set(msg.id, msg));
-  
+
       // Create a new array from the map values
       const combinedMessages = Array.from(messageMap.values());
-  
+
       // Save updated messages to AsyncStorage
       await AsyncStorage.setItem(storageKey, JSON.stringify(combinedMessages));
-  
+
       console.log('AsyncStorage updated with new messages.');
     } catch (error) {
       console.error('Failed to update AsyncStorage:', error);
     }
   };
-  
 
-  const handlemessagereceive = (message) => {
+  const handlemessagereceive = (message: Message) => {
     if (!message || !message.sender || !message.sender.id) {
       console.error('First message data is missing or invalid:', message);
       return;
@@ -385,20 +451,19 @@ const Recents = () => {
       sessions: message.sessions
     };
   
-    // console.log('Params to send:', paramsToSend);
-  
     setModalVisible(false);
     router.push({
-      pathname: '/messagereceiver',
+      pathname: '/message/messagereceiver',
       params: paramsToSend
     });
-  };  
+  }; 
 
-  const handleViewDetails = (product) => {
-    navigation.navigate('ProductDetails', { product: JSON.stringify(product) });
-  };
+  const handleViewDetails = (product: any) => {
+    console.log('Viewing product details:', product.id);
+    navigation.navigate('ProductDetails', { productId: product.id });
+  };;
 
-  const handleDelete = async (productId: any) => {
+  const handleDelete = async (product: { id: number; image: string; title: string; description: string; price: string; locate: string; created_at: string; }) => {
     Alert.alert(
       'Confirm Deletion',
       `Are you sure you want to delete this product?`,
@@ -416,7 +481,7 @@ const Recents = () => {
               if (!token) return;
 
               await axios.put(
-                `http://10.0.2.2:8000/api/products/${productId}/live`,
+                `http://10.0.2.2:8000/api/products/${product.id}/live`,
                 { live: false },
                 {
                   headers: {
@@ -426,7 +491,7 @@ const Recents = () => {
                 }
               );
 
-              console.log('Product deleted', productId);
+              console.log('Product deleted', product.id);
               Alert.alert('Product is now deleted');
               fetchProducts(); // Refresh the product list
             } catch (error) {
@@ -439,92 +504,148 @@ const Recents = () => {
     );
   };
 
-  const onRefreshProducts = async () => {
+  const lastFetchTime = useRef(0);  // To track the last fetch time
+const debounceDelay = 10000;  // 10 seconds to wait between fetches
+
+const onRefreshProducts = async () => {
+  // Check if enough time has passed since the last fetch to avoid 429
+  const currentTime = Date.now();
+  if (currentTime - lastFetchTime.current > debounceDelay) {
     setIsRefreshing(true);
     await fetchProducts();
     setIsRefreshing(false);
-  };
+    lastFetchTime.current = currentTime;
+  } else {
+    console.log('Fetch skipped to prevent 429');
+  }
+};
 
-  const fetchData = async () => {
-    console.log('Fetching data...');
-    await fetchProducts();
-    await fetchMessages();
-    await fetchMessagelist();
-  
-    // const productIds = messageID;
-    // if (!productIds || productIds.length === 0) {
-    //   console.log('productIds is empty, retrying...');
-    //   await onRefreshMessages();
-    // }
-  };
+const fetchData = async () => {
+  console.log('Fetching data...');
+  await fetchProducts();
+  await fetchMessages();
+  await fetchMessagelist();
+};
 
-  useEffect(() => {
-    const executeFetch = async () => {
-      if (isFocused) {
+useEffect(() => {
+  const executeFetch = async () => {
+    if (isFocused) {
+      const currentTime = Date.now();
+      if (currentTime - lastFetchTime.current > debounceDelay) {
         setLoading(true);
         await fetchData();
         setLoading(false);
+        lastFetchTime.current = currentTime;
+      } else {
+        console.log('Fetch skipped to prevent 429');
       }
-    };
+    }
+  };
 
-    executeFetch();
-  }, [isFocused]);
+  executeFetch();
+}, [isFocused]);
 
-  
-  const onRefreshMessages = async () => {
+const onRefreshMessages = async () => {
+  const currentTime = Date.now();
+  if (currentTime - lastFetchTime.current > debounceDelay) {
     setIsRefreshingMessages(true);
     await fetchData();
     setIsRefreshingMessages(false);
-  };
+    lastFetchTime.current = currentTime;
+  } else {
+    console.log('Fetch skipped to prevent 429');
+  }
+};
 
   const sortedpost = products.sort((a, b) => {
-    const dateA = new Date(a.created_at);
-    const dateB = new Date(b.created_at);
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
     return dateB - dateA; // Sort in descending order
   });
 
-  const sortedData = messages.sort((a, b) => {
-    const aCount = sessionCounts[a.id] || 0;
-    const bCount = sessionCounts[b.id] || 0;
-    return bCount - aCount; // Sort in descending order
+  const sortedData: ProductMessage[] = messages.map((message: any) => {
+    // Assume message has a product_id which is used to match with messageList
+    const messageFromList = messageList[message.id]?.[0];
+    return {
+      id: message.id,
+      image: message.image || '',
+      title: message.title || '',
+      created_at: messageFromList ? messageFromList.created_at : 'Unknown Date', // Use created_at from messageList
+    };
+  }).sort((a, b) => {
+    // Sort by created_at descending
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
-  
-  
+
+
 
   return (
     <View style={styles.container}>
       {/* Product List */}
       <View style={styles.transactionsContainer}>
         <View style={styles.poster}>
-          <Text style={styles.label}>Transactions:</Text>
+          <Text style={styles.label}>Posted Products:</Text>
           <Text style={styles.totalProducts}>Total Post: {products.length}</Text>
         </View>
         <FlatList
           data={sortedpost}
           renderItem={({ item }) => (
-            <ProductItem item={item} handleViewDetails={handleViewDetails} handleDelete={handleDelete} />
+            <ProductItem 
+            item={item} 
+            handleViewDetails={handleViewDetails} 
+            handleDelete={handleDelete} 
+            />
           )}
           keyExtractor={(item) => item.id.toString()}
           extraData={products}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefreshProducts} />
           }
-          ListEmptyComponent={<Text style={styles.placeholderText}>No Posted Product yet...</Text>}
+          ListEmptyComponent={
+            <View style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 20,
+              }}>
+              <Text style={{
+                  marginTop: 10,
+                  fontSize: 18,
+                  fontWeight: '600',
+                  color: '#444',
+                  textAlign: 'center',
+                }}>
+                No Posted Product Yet
+              </Text>
+              <Text style={{
+                  marginTop: 5,
+                  fontSize: 14,
+                  color: '#888',
+                  textAlign: 'center',
+                  paddingHorizontal: 15,
+                  lineHeight: 20,
+                }}>
+                 You will see you Posted Product Here
+              </Text>
+            </View>
+          }
         />
       </View>
 
       {/* Message List */}
       <View style={styles.transactionsContainer}>
         <View style={styles.poster}>
-          <Text style={styles.label}>Item Messages:</Text>
+          <Text style={styles.label}>Product Messages:</Text>
+          {/* <Text style={styles.totalProducts}>item with message: {sessionCounts.le}</Text> */}
         </View>
         <>
             {loading ? (
               <Text style={styles.loadingstate}>Loading...</Text> // Show a loading indicator or placeholder
             ) : (
               <FlatList
-                data={sortedData}
-                renderItem={({ item }) => {
+                // data={sortedData}
+                data={messages}
+                renderItem={({ item }: { item: { id: number } }) => {
                   const sessionCount = sessionCounts[item.id] || 0;
                   return (
                     <RenderProductMessages 
@@ -539,7 +660,34 @@ const Recents = () => {
                 refreshControl={
                   <RefreshControl refreshing={isRefreshingMessages} onRefresh={onRefreshMessages} />
                 }
-                ListEmptyComponent={<Text style={styles.placeholderText}>No Messages yet...</Text>}
+                ListEmptyComponent={
+                  <View style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 20,
+                    }}>
+                    <Text style={{
+                        marginTop: 10,
+                        fontSize: 18,
+                        fontWeight: '600',
+                        color: '#444',
+                        textAlign: 'center',
+                      }}>
+                      No Product Messages Yet
+                    </Text>
+                    <Text style={{
+                        marginTop: 5,
+                        fontSize: 14,
+                        color: '#888',
+                        textAlign: 'center',
+                        paddingHorizontal: 15,
+                        lineHeight: 20,
+                      }}>
+                       Respond to Customer Messages Here.
+                    </Text>
+                  </View>
+                }
               />
             )}
           </>
@@ -570,7 +718,7 @@ const Recents = () => {
       ) : (
         <FlatList
           data={selectedMessages}
-          keyExtractor={(item) => item.first.id.toString()}  
+          keyExtractor={(item) => item.first.id.toString()}
           renderItem={renderMessage}
         />
       )}
@@ -590,7 +738,7 @@ const styles = StyleSheet.create({
   },
   transactionsContainer: {
     marginBottom: 20,
-    height: 318,
+    height: 380,
   },
   productItem: {
     flexDirection: 'row',

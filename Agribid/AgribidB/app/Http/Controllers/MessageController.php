@@ -16,73 +16,90 @@ class MessageController extends Controller
 {
     // Send a new message
     public function sendMessage(Request $request)
-{
-    $request->validate([
-        'text' => 'nullable|string',
-        'receiver_id' => 'required|exists:users,id',
-        'product_id' => 'required|exists:products,id',
-        'sender_id' => 'required|exists:users,id',
-        'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-    ]);
-
-    try {
-        $imageName = null;
-
-        if ($request->hasFile('image')) {
-            $image = $request->file('image');
-            $imageName = Str::random(10) . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('public/message/images', $imageName);
-            $validatedData['image'] = $imageName;
-        } else {
-            $validatedData['image'] = null;
-        }
-
-        // Sanitize the text input
-        $text = htmlspecialchars($request->input('text'), ENT_QUOTES, 'UTF-8');
-
-        if ($imageName) {
-            $text = $imageName;
-        }
-
-        $existingSession = Message::where('product_id', $request->product_id)
-                                  ->where(function ($query) use ($request) {
-                                      $query->where('sender_id', $request->sender_id)
-                                            ->where('receiver_id', $request->receiver_id)
-                                            ->orWhere('sender_id', $request->receiver_id)
-                                            ->where('receiver_id', $request->sender_id);
-                                  })
-                                  ->max('sessions');
-
-        $newSession = $existingSession ? $existingSession : (Message::max('sessions') + 1);
-
-        $message = Message::create([
-            'text' => $text,
-            'sender_id' => $request->sender_id,
-            'receiver_id' => $request->receiver_id,
-            'product_id' => $request->product_id,
-            'sessions' => $newSession,
-        ]);
-
-        $message = Message::with('sender', 'receiver')->find($message->id);
-
-        broadcast(new MessageSent($message))->toOthers();
-
-        return response()->json([
-            'message' => $message,
-        ], 200);
-    } catch (\Exception $e) {
-        Log::error('Error creating product: ' . $e->getMessage());
-
-        return response()->json([
-            'message' => 'Something went wrong while creating the product!',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-
-    return response()->json($message, 201);
-}
-
+    {
+        $request->validate([
+            'text' => 'nullable|string|required_without:image',
+            'receiver_id' => 'required|exists:users,id',
+            'product_id' => 'required|exists:products,id',
+            'sender_id' => 'required|exists:users,id',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048|required_without:text',
+        ]);        
     
+        try {
+            $imageName = null;
+            if ($request->hasFile('image')) {
+                $image = $request->file('image');
+                $imageName = Str::random(10) . '.' . $image->getClientOriginalExtension();
+                $path = $image->storeAs('public/message/images', $imageName);
+                $validatedData['image'] = $imageName;
+            } else {
+                $validatedData['image'] = null;
+            }
+    
+            // Sanitize the text input conditionally
+            $text = $request->input('text');
+            $dangerousPatterns = [
+                '/<script.*?>.*?<\/script>/is', // JavaScript tags
+                '/<.*?>/', // HTML tags
+                '/(alert\()/' // JavaScript alert
+            ];
+    
+            foreach ($dangerousPatterns as $pattern) {
+                if (preg_match($pattern, $text)) {
+                    $text = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+                    break;
+                }
+            }
+    
+            if ($imageName) {
+                $text = $imageName;
+            }
+    
+            $existingSession = Message::where('product_id', $request->product_id)
+                ->where(function ($query) use ($request) {
+                    $query->where('sender_id', $request->sender_id)
+                        ->where('receiver_id', $request->receiver_id)
+                        ->orWhere('sender_id', $request->receiver_id)
+                        ->where('receiver_id', $request->sender_id);
+                })
+                ->max('sessions');
+    
+            $newSession = $existingSession ? $existingSession : (Message::max('sessions') + 1);
+    
+            $message = Message::create([
+                'text' => $text,
+                'sender_id' => $request->sender_id,
+                'receiver_id' => $request->receiver_id,
+                'product_id' => $request->product_id,
+                'sessions' => $newSession,
+            ]);
+    
+            // Log the message just before broadcasting
+            Log::info('Message Created and Ready to Broadcast:', ['message' => $message]);
+    
+            // Fetch the full message with relationships before broadcasting
+            $message = Message::with('sender', 'receiver')->find($message->id);
+    
+            // Broadcast the message to the receiver
+            broadcast(new MessageSent($message))->toOthers();
+    
+            // Log after broadcasting
+            Log::info('Message Broadcasted Successfully:', ['message' => $message]);
+    
+            return response()->json([
+                'message' => $message,
+            ], 200);
+    
+        } catch (\Exception $e) {
+            Log::error('Error creating product: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Something went wrong while creating the product!',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    
+        return response()->json($message, 201);
+    }    
 
 
 public function checkSession(Request $request)
@@ -212,7 +229,7 @@ public function getMessages(Request $request) {
     }
 
     public function getMessageslistgeneral(Request $request) {
-        $productId = $request->input('productId');
+        $productId = $request->input('Id');
     
         // Fetch messages that match the productId along with sender data
         $messages = Message::where('product_id', $productId)
@@ -248,6 +265,18 @@ public function getMessages(Request $request) {
     
         return response()->json($result);
     }
+
+    public function markAsRead($id)
+{
+    $Message = Message::find($id);
+    Log::info('Marking comment as read:', ['Message' => $Message]);
+    if ($Message) {
+        $Message->isRead = true;
+        $Message->save();
+        return response()->json(['success' => true, 'message' => 'Message marked as read']);
+    }
+    return response()->json(['success' => false, 'message' => 'Message not found'], 404);
+}
 
     // Delete a message
     public function deleteMessage($id)

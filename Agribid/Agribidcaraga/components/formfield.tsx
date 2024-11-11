@@ -64,7 +64,7 @@ const FormField: React.FC<FormFieldProps> = ({
         {(title === "Password" || title === "ConfirmPassword") && (
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
             <Image
-              source={!showPassword ? icons.eye : icons.eyeHide}
+              source={!showPassword ? icons.eyeHide : icons.eye}
               style={styles.icon}
               resizeMode="contain"
             />
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     
   },
   title: {
-    fontSize: 12, // Equivalent to 'text-base'
+    fontSize: 15, // Equivalent to 'text-base'
     color: '#F5F5F5', // Equivalent to 'text-gray-100'
     fontFamily: 'Poppins-Regular', // Adjust based on your font family
   },

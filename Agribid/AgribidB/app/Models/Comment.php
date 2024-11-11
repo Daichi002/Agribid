@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/Comment.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +10,7 @@ class Comment extends Model
     use HasFactory;
     protected $table = 'comments';
 
-    protected $fillable = ['product_id', 'userId', 'text'];
+    protected $fillable = ['product_id', 'userId', 'text', 'isRead'];
 
     public function user()
     {

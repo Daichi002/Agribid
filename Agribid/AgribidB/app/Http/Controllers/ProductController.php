@@ -6,8 +6,10 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth; 
+use Illuminate\Support\Facades\DB;
 use App\Http\Requests\UpdateLiveRequest; 
 
 
@@ -20,20 +22,56 @@ class ProductController extends Controller
         ->get();
     }
 
-    public function getUserProducts(Request $request)
-    {
-        // Get the authenticated user's ID
-        $userId = $request->user()->id; 
-        Log::info("Fetching products for user ID: " . $userId);
-    
-        // Fetch products belonging to the authenticated user
-        $products = Product::where('user_id', $userId)
-                           ->select('id', 'user_id', 'title', 'description', 'image', 'created_at')
-                           ->where('live', true)
-                           ->get();
-    
-        return response()->json($products);
-    }
+    public function productdetails($productId)
+{
+   // Fetch products belonging to the authenticated user
+    $products = Product::where('id', $productId)
+        ->select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+        ->where('live', true)
+        ->with(['user:id,Firstname,Lastname']) // Only fetch the firstname and lastname from User
+        ->first();
+
+    return response()->json($products);
+}
+
+
+public function getUserProducts(Request $request)
+{
+    // Get the authenticated user's ID
+    $userId = $request->user()->id;
+
+    Log::info("Fetching products for user ID: " . $userId);
+
+    // Fetch products belonging to the authenticated user
+    $products = Product::where('user_id', $userId)
+                        ->select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+                        ->where('live', true)
+                        ->with(['user:id,Firstname,Lastname']) // Only fetch the firstname and lastname from User
+                        ->get();
+
+    return response()->json($products);
+}
+
+public function getUserwithProducts($userId)
+{
+    Log::info("Fetching userwithproductID: " . $userId);
+
+    // Fetch products belonging to the user with user ID passed
+    $products = Product::where('user_id', $userId)
+        ->select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+        ->where('live', true)
+        ->with(['user:id,Firstname,Lastname']) // Fetch user information
+        // ->with(['ratings:id,product_id,rating']) 
+        ->get();
+
+    Log::info("Fetching userwithproduct: " . $products);  
+        return response()->json([
+            'user' => $products->first()?->user, // Include user information
+            // 'ratings' => $products->ratings,
+            'products' => $products // Include products list with average rating as 'rating_avg'
+        ]);
+
+}
 
     public function getUserProductmessage(Request $request)
     {
@@ -130,43 +168,86 @@ class ProductController extends Controller
         ]);
     }
 
-    public function update(Request $request, Product $product)
+    public function update(Request $request)
     {
-        $request->validate([
-            'title' => 'required',
-            'description' => 'required',
-            'quantity' => 'required|integer',
-            'price' => 'required|numeric',
-            'locate' => 'required|string',
-            'image' => 'nullable|image'
+        $validatedData = $request->validate([
+            'id' => 'required|exists:products,id', // Ensure the product exists
+            'title' => 'nullable|string',
+            'description' => 'nullable|string',
+            'quantity' => 'nullable|integer',
+            'unit' => 'nullable|string', // Add unit field
+            'price' => 'nullable|numeric',
+            'locate' => 'nullable|string',
+            'image' => 'nullable|image',
+            'updated_at' => 'required|date'
         ]);
+    
+         // Log the validated data for debugging
+    Log::info('Validated data:', $validatedData);
 
-        try {
-            $product->fill($request->post())->update();
-
+        try {  
+            // Combine quantity and unit
+            $validatedData['quantity'] = isset($validatedData['quantity'], $validatedData['unit']) 
+                ? $validatedData['quantity'] . ' ' . $validatedData['unit'] 
+                : $validatedData['quantity'];
+    
+            // Retrieve the product by ID
+            $product = Product::findOrFail($validatedData['id']);
+    
+            // Update non-image fields except 'image' and 'unit'
+            $product->fill(Arr::except($validatedData, ['image', 'unit']));
+    
+            // Handle image update if a new image is provided
             if ($request->hasFile('image')) {
+                // Delete old image if it exists
                 if ($product->image) {
                     Storage::delete('public/product/images/' . $product->image);
                 }
-
+    
+                // Store the new image
                 $imageName = Str::random(10) . '.' . $request->image->getClientOriginalExtension();
                 $path = $request->image->storeAs('public/product/images', $imageName);
-
                 $product->image = $imageName;
-                $product->save();
             }
-
+    
+            // Save all changes
+            $product->save();
+    
             return response()->json([
                 'message' => 'Product Updated Successfully!',
-                'image_url' => isset($path) ? Storage::url($path) : null
+                'image_url' => isset($path) ? Storage::url($path) : null,
+                'id' => $product->id
             ]);
         } catch (\Exception $e) {
-           
+            // Log the error message for debugging
+            Log::error('Product update error: ' . $e->getMessage());
+    
             return response()->json([
-                'message' => 'Something went wrong while updating the product!'
+                'message' => 'Something went wrong while updating the product!',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
+    
+
+    
+    public function getIDProducts(Request $request)
+    {
+        // Get the authenticated user's ID
+        $userId = $request->user()->id; 
+        Log::info("Fetching notif for user ID: " . $userId);
+    
+        // Fetch products belonging to the authenticated user
+        $products = Product::where('user_id', $userId)
+                           ->select('id', 'title', 'image', 'created_at')
+                           ->where('live', true) // Ensure this is the same as getUserProducts
+                           ->get();
+    
+        return response()->json($products);
+    }
+    
+    
+
 
     public function updateLive(UpdateLiveRequest $request, $id)
     {

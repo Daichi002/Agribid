@@ -22,32 +22,39 @@ interface User {
   address: string;
 }
 
-interface Message {
-  id: string;
-  text: string;
-  sender_id: string;
-  receiver_id: string;
-  sender: string;
-  first?: string;
-  latest?: string;
-  // Add other properties as needed
-}
-
 interface MessageGroup {
-  latest: { updated_at: string };
+  id: string;
+  first: {
+    product_id: any;
+    sender_id: any;
+    receiver_id: any;
+    sessions: any;
+    sender: any;
+    receiver: any;
+    created_at: string;
+  };
+  latest: {
+    updated_at: string;
+    id: string;
+    sender_id: string;
+    isRead: boolean;
+  };
+  isRead: boolean;
   // Add other properties as needed
 }
 
 
 
 const UserDetailsScreen = () => {
+    const [isSubmitting, setSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const navigation = useNavigation();
     const [Firstname, setFirstname] = useState('');
     const [Lastname, setLastname] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [address, setAddress] = useState('');
     const [currentUser, setCurrentUser] = useState<User | null>(null); 
-    const [currentUserId, setCurrentUserId] = useState(null);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(true);
     const [messageList, setMessageList] = useState<MessageGroup[]>([]);
@@ -55,7 +62,10 @@ const UserDetailsScreen = () => {
     const [showAlert, setShowAlert] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [clickedItems, setClickedItems] = useState(new Set());
-    const [newMessages, setNewMessages] = useState([]);
+    const [newMessages, setNewMessages] = useState<string[]>([]);
+    const [readStates, setReadStates] = useState(
+      messageList.map(() => false) // Initialize read states for each notification
+    );
   
     const [forceRender, setForceRender] = useState(false); 
     const [Barangays, setBarangays] = useState<Barangay[]>([]);
@@ -169,7 +179,7 @@ useEffect(() => {
         const parsedUser = JSON.parse(userInfo); // Assuming userInfo is a valid JSON string
         const normalizedUser = normalizeKeys(parsedUser); // Normalize keys
 
-        setCurrentUser(normalizedUser);
+        setCurrentUser(normalizedUser as User);
 
         const userId = Number(normalizedUser.id);
         if (!isNaN(userId)) {
@@ -193,7 +203,13 @@ useEffect(() => {
   if (currentUser) {
     setFirstname(currentUser.firstname || '');
     setLastname(currentUser.lastname || '');
-    setPhoneNumber(currentUser.phonenumber || '');
+    
+    // Remove +63 prefix if present
+    const phoneNumberWithoutPrefix = currentUser.phonenumber?.startsWith('+63')
+      ? currentUser.phonenumber.slice(3)
+      : currentUser.phonenumber || '';
+      
+    setPhoneNumber(phoneNumberWithoutPrefix);
     setAddress(currentUser.address || '');
 
     // console.log('Current user:', currentUser);
@@ -208,6 +224,8 @@ useEffect(() => {
   }
 }, [currentUser, barangayLookup]);
 
+
+
   // Update user details
   const handleSave = async () => {
     // console.log('User details:', { Firstname, Lastname, phoneNumber, address });  
@@ -218,60 +236,60 @@ useEffect(() => {
         return;
       }
 
-    const address = barangayLookup[selectedBarangay];
+    const formattedPhonenumber = phoneNumber.startsWith("+63")
+  ? phoneNumber
+  : `+63${phoneNumber}`;
+
+   // Check if the phone number already exists
+   const checkResponse = await axios.get('http://10.0.2.2:8000/api/check-phone', {
+    params: { Phonenumber: formattedPhonenumber, currentUserId },
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (checkResponse.data.exists) {
+    Alert.alert("Error", "Phone number already exists.");
+    setIsLoading(false);
+    setSubmitting(false);
+    return;
+  }
   
-      const response = await axios.put(`http://10.0.2.2:8000/api/users/${currentUserId}`, {
+  const address = barangayLookup[selectedBarangay];
+
+  console.log('sending to vefiry')
+      router.push({
+        pathname: '/verifyupdateuser',
+        params: {
+        currentUserId,
         Firstname,
         Lastname,
-        phoneNumber,
+        Phonenumber: formattedPhonenumber,
         address,
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-      });
-  
-      let updatedUser = response.data.user;
-  
-      // Normalize the keys to match what is stored in AsyncStorage
-      updatedUser = {
-        ...updatedUser,
-        address: updatedUser.address,
-        phonenumber: updatedUser.phonenumber,
-      };
-  
-      // console.log('User details updated:', updatedUser);
-      // Alert.alert('Success', 'User details updated successfully!');
-      setShowAlert(true);
-      setTimeout(() => {
-        setShowAlert(false);
-      }, 3000);
-  
-      // Set the state directly with updated user
-      setCurrentUser(updatedUser);
-  
-      // Also update AsyncStorage for consistency
-      await AsyncStorage.setItem('userInfo', JSON.stringify(updatedUser));
-  
-      // Reload the page to reflect updates
-      setForceRender(prev => !prev);
-  
+      });        
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        console.error('Error response data:', error.response?.data);
+        if (error.response && error.response.status === 409) {
+          Alert.alert('Error', 'Use Your Own Phonenumber .');
+        } else {
+          console.error('An error occurred:', error);
+          Alert.alert('Error', 'An error occurred while updating the user.');
+        }
       } else {
         console.error('Unexpected error:', error);
+        Alert.alert('Error', 'An unexpected error occurred.');
       }
-      Alert.alert('Error', 'Failed to update user details.');
     }
   };  
 
 
   // the message function start here 
   // function to send user if user is person who creator open modal if not send user to message
-  const handlemessage = (first: { product_id: any; sender_id: any; receiver_id: any; sessions: any; }, latest: string | undefined) => {
-    setClickedItems((prev) => new Set(prev).add(latest.Id));
+  const handlemessage = (first: { product_id: any; sender_id: any; receiver_id: any; sessions: any; }, latest: { id: string } | undefined) => {
+    if (latest) {
+      if (latest && typeof latest === 'object' && 'id' in latest) {
+        setClickedItems((prev) => new Set(prev).add(latest?.id));
+      }
+    }
     const params = {
       productId: first.product_id, // Use product_id from the first data
       senderId: first.sender_id,
@@ -281,7 +299,7 @@ useEffect(() => {
   
     if (currentUserId === first.sender_id) {
       router.push({
-        pathname: '/messagesender',
+        pathname: '/message/messagesender',
         params: {
           productId: first.product_id,
           productuserId: first.receiver_id, // Assuming the receiver is the product user
@@ -290,18 +308,12 @@ useEffect(() => {
     } else {
       // console.log('Navigating to messagereceiver with params:', params);
       router.push({
-        pathname: '/messagereceiver',
+        pathname: '/message/messagereceiver',
         params: params,
       });
     }
     setModalVisible(false); // Close the modal after routing
   };
-
-  const checkNewMessages = (latestMessageId) => {
-    // Ensure latestMessageId is defined and newMessages contains the ID
-    return latestMessageId && newMessages.includes(latestMessageId) && !clickedItems.has(latestMessageId);
-  };
-  
   
   // function for message list
   const formatTime = (datetime: string | number | Date) => {
@@ -311,41 +323,164 @@ useEffect(() => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
   
-  const renderMessage = ({ item }: { item: Message }) => {
+  // Determine if there are any unread notifications
+  const hasUnreadNotifications = readStates.includes(false);
+
+  // Determine the icon source based on read states
+  const iconSource = hasUnreadNotifications ? icons.contactnoti : icons.contact;
+  // fix the issue in where icons are not showing properly if readstate is false
+
+  const renderMessage = ({ item, index }: { item: MessageGroup, index: number }) => {
     const { first, latest } = item;
-    const sender = first ? normalizeKeys(first.sender) : undefined;
-    const receiver = first ?normalizeKeys(first.receiver) : undefined;
+    const isRead = readStates[index] || (Number(latest?.sender_id) === currentUserId); // Mark as read if sender is the current user
+      
+      let firstObj;
+  
+    try {
+      if (first) {
+        if (typeof first === 'string') {
+          // console.log('JSON String:', first); // Log the JSON string
+          firstObj = JSON.parse(first);
+        } else {
+          // console.log('Object:', first); // Log the object
+          firstObj = first;
+        }
+      } else {
+        firstObj = undefined;
+      }
+    } catch (error) {
+      console.error('JSON Parse error:', error);
+      firstObj = undefined;
+    }
+
+  const notificationBackgroundColor = (Number(latest?.sender_id) === currentUserId) ||latest.isRead ? '#ffffff' : '#e6f7ff'; // Light blue for unread notifications
+
+  const handleNotificationClick = async (index: number) => {
+      const newReadStates = [...readStates];
+    newReadStates[index] = true; // Mark the notification as read
+    setReadStates(newReadStates);
+    console.log('Updated readStates:', newReadStates);
+    first && handlemessage(typeof first === 'string' ? JSON.parse(first) 
+      : first, latest && typeof latest === 'object' && 'id' in latest ? latest : undefined);
+
+       // Check if the notification's sender ID matches the current user ID
+  if (Number(latest?.sender_id) === currentUserId) {
+    console.log('No need to mark as read for the current user\'s own message');
+    return;
+  }
+    // Send request to mark notification as read
+  try {
+    const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.error('No auth token found');
+        return;
+      }
+      console.log('Marking as read:', latest.id);
+      const messageId = latest.id;
+
+      const response = await axios.post(
+        `http://10.0.2.2:8000/api/message/${messageId}/mark-read`,
+        {}, // Empty object for data since this is a POST without a body
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+    const data = await response.data;
+    if (!data.success) {
+      console.error('Failed to mark as read:', data.message);
+    }
+  } catch (error) {
+    console.error('Error marking as read:', error);
+  }
+  };
+
+    // Check if the sender_id matches the currentUserId
+  if (!firstObj || firstObj.sender_id !== currentUserId) {
+    return null; // Don't render this message if the sender_id doesn't match
+  } 
+    const sender = firstObj ? normalizeKeys(firstObj.sender) : undefined;
+    const receiver = firstObj ? normalizeKeys(firstObj.receiver) : undefined;
   
     // Check if the sender ID matches the current user ID and append "You send" or "You receive" accordingly
-    const displayName = first.sender_id === currentUserId
-      ? `${receiver.firstname || 'Unknown'} ${receiver.lastname || ''} -📤` 
-      : `${sender.firstname || 'Unknown'} ${sender.lastname || ''} - 📥`;
+    const displayName = `${receiver?.firstname || 'Unknown'} ${receiver?.lastname || ''}${
+      (Number(latest?.sender_id) === currentUserId) || latest?.isRead ? '' : ' - 📥'
+    }`;    
+    
+    // to display the message sender and receiver for debugging only
+    // const displayName = firstObj && firstObj.sender_id === currentUserId
+    //   ? `${receiver?.firstname || 'Unknown'} ${receiver?.lastname || ''} -📤`
+    //   : `${sender?.firstname || 'Unknown'} ${sender?.lastname || ''} - 📥`;
   
     // Function to check if text is an image URL
-    const isImageUrl = (text) => {
+    const isImageUrl = (text: string) => {
       const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
       return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
     };
-  
     return (
-      <TouchableOpacity onPress={() => handlemessage(first, latest)}>
-        <View style={styles.messageContainer}>
+      <TouchableOpacity 
+        onPress={() => handleNotificationClick(index)}
+        style={[styles.messageContainer, { backgroundColor: notificationBackgroundColor }]}
+      >
+        <View >
           <Text style={styles.senderName}>
             {displayName || 'Unknown'}
           </Text>
           <View style={styles.messageRow}>
             <Text style={styles.usermessageText}>
-              {isImageUrl(latest.text) ? 'Image' : (latest.text || 'No message content')}
+              {isImageUrl((latest as any)?.text ?? '') ? 'Image' : ((latest as any)?.text || 'No message content')}
             </Text>
             <Text style={styles.messageTime}>
-              {latest.created_at ? formatTime(latest.created_at) : 'No message content'}
+              {latest && typeof latest === 'object' && 'created_at' in latest ? formatTime(
+                (latest as { created_at: string }).created_at) : 'No message content'}
             </Text>
           </View>
-          {checkNewMessages(latest.id) && <Text style={styles.warningText}>You have a 📩!</Text>}
         </View>
       </TouchableOpacity>
     );
   };
+
+  const userMessagesCount = messageList.filter((item) => {
+    const firstObj = typeof item.first === 'string' ? JSON.parse(item.first) : item.first;
+    return firstObj?.sender_id === currentUserId;
+  }).length;
+
+  useEffect(() => {
+    const loadAndFetchMessages = async () => {
+      await loadMessagesFromStorage();
+      
+      // Wait until currentUserId is populated
+      if (currentUserId !== null) {
+        await fetchMessages(); // Fetch from server to update messages
+      }
+    };
+  
+    loadAndFetchMessages();
+  }, [currentUserId]);
+  
+  const reloadScreen = () => {
+    onRefresh();
+    console.log('Screen reloaded!');
+  };
+  
+  const onRefresh = async () => {
+    setRefreshing(true);
+  
+    // Wait until currentUserId is populated
+    if (currentUserId !== null) {
+      await fetchMessages();
+    }
+  
+    setRefreshing(false);
+  };
+  
+  
+  useFocusEffect(
+    useCallback(() => {
+      reloadScreen();
+    }, [])
+  );
   
 
 
@@ -364,11 +499,12 @@ useEffect(() => {
   // the function to fetch messages created by user 
   const fetchMessages = async () => {
     const userId = currentUserId; //use current logged in user as parameter
-    // console.log('currenuserid', currentUser?.id, currentUserId)
+    console.log('currentUserId:', currentUserId);
+    console.log('userId:', userId);
 
-    if (userId === 0) {
-      // console.error('User not authenticated. Reloading page...');
-      window.location.reload(); // Reload the page if currentUser is empty
+    if (userId === 0 || userId === null) {
+      console.error('User not authenticated or userId is null. Reloading page...');
+      window.location.reload(); // Reload the page if currentUser is empty or userId is null
       return;
     }
     
@@ -384,26 +520,27 @@ useEffect(() => {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
       });
-
-       // Check for a 404 response
-       if (response.data.length === 0) {
+      
+      // Ensure the response data is an array
+      const responseData = Array.isArray(response.data) ? response.data : [response.data];
+      
+      // Check for a 404 response or empty data
+      if (responseData.length === 0) {
         // No messages found, do nothing or handle accordingly
         await AsyncStorage.removeItem(`messages_${userId}`);
         return; // Do nothing further
-    }
-       // Check if the response data is empty or not an array
-    if (!Array.isArray(response.data)) {
-      console.error('Data is not an array:', response.data);
-      return;
-    }
-  
-      const isValidData = response.data.every(item => item.first && item.latest); // validate the date first and latest if they are actual 
-      if (!isValidData) {                                                         // the data expected throw and error if not
+      }
+      
+      // Validate the data format
+      const isValidData = responseData.every(item => item.first && item.latest);
+      if (!isValidData) {
         console.error('Invalid data format:', response.data);
         return;
       }
+      
+      // Proceed with processing responseData
   
-      const groupedMessages = response.data.reduce((acc, message) => {   //group message first and latest messages by sessions
+      const groupedMessages = responseData.reduce((acc, message) => {   //group message first and latest messages by sessions
         const { sessions } = message.first;
         if (!acc[sessions]) {
           acc[sessions] = { first: message.first, latest: message.latest };
@@ -430,11 +567,16 @@ useEffect(() => {
   
       setMessageList(groupedMessagesArray);
       setTotalmessage(groupedMessagesArray.length);
-      updateUserMessagesInStorage(userId, groupedMessagesArray);
+      console.log('Before updating storage, userId:', userId);
+      if (userId !== null) {
+        updateUserMessagesInStorage(userId, groupedMessagesArray);
+      } else {
+        console.error('User ID is null, cannot update messages in storage.');
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
   
-      if (error.response) {
+      if (axios.isAxiosError(error) && error.response) {
           // Server responded with a status code outside the range of 2xx
           console.error('Response data:', error.response.data);
           console.error('Response status:', error.response.status);
@@ -455,13 +597,17 @@ useEffect(() => {
                   Alert.alert('Error', 'Failed to fetch messages. Please try again.');
                   break;
           }
-      } else if (error.request) {
+      } else if (axios.isAxiosError(error) && error.request) {
           // Request was made but no response was received
           console.error('Request data:', error.request);
           Alert.alert('Error', 'Network error. Please check your connection.');
       } else {
           // Something else happened in making the request
-          console.error('Error message:', error.message);
+          if (error instanceof Error) {
+            console.error('Error message:', error.message);
+          } else {
+            console.error('Unexpected error:', error);
+          }
           Alert.alert('Error', 'An unexpected error occurred.');
       }
   } finally {
@@ -469,7 +615,7 @@ useEffect(() => {
     }
   };
 
-  const updateUserMessagesInStorage = async (userId, newMessages) => {
+  const updateUserMessagesInStorage = async (userId: number, newMessages: MessageGroup[]) => {
     try {
       const storageKey = `messages_${userId}`;
       const existingMessages = await AsyncStorage.getItem(storageKey);
@@ -481,7 +627,7 @@ useEffect(() => {
       }
   
       // Create a map for current messages
-      const messageMap = new Map(currentMessages.map(msg => [msg.id, msg]));
+      const messageMap = new Map(currentMessages.map((msg: MessageGroup) => [msg.id, msg]));
   
       // Add new messages to the map, logging new additions
       newMessages.forEach(msg => {
@@ -503,30 +649,8 @@ useEffect(() => {
     }
   };
 
-useEffect(() => {
-  loadMessagesFromStorage();
-  fetchMessages(); // Fetch from server to update messages
-}, [currentUserId]);
-
-const reloadScreen = () => {
-  fetchMessages();
-  console.log('Screen reloaded!');
-};
-
-const onRefresh = async () => {
-  setRefreshing(true);
-  await fetchMessages();
-  setRefreshing(false);
-};
-  
-    useFocusEffect(
-      useCallback(() => {
-        reloadScreen();
-      }, [])
-    );
-
   return (
-        <ScrollView>
+        <ScrollView style={styles.scrollview}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.GoButton} onPress={() => { 
                 router.navigate("/sell");
@@ -548,10 +672,11 @@ const onRefresh = async () => {
               }}>    
             <Text style={styles.messageText}>
               <Image 
-              source={icons.contact} 
+               source={iconSource} 
               style={styles.icon}
               resizeMode="contain" // Ensure the image fits within the circular container
-            /> Messages</Text>
+            />
+            Messages</Text>
           </TouchableOpacity>
         </View>
         {/* this is the message modal  */}
@@ -568,7 +693,8 @@ const onRefresh = async () => {
               <View style={styles.messageheader}>
                 <Text style={styles.headerText}> 
                   You have`
-                  {totalmessage > 0 ? totalmessage : ''}` 
+                  {/* {totalmessage > 0 ? totalmessage : ''}`  */}
+                  {userMessagesCount > 0 ? userMessagesCount : 'No'}
                   <Image 
                     source={icons.contact} 
                     style={styles.icon}
@@ -589,7 +715,7 @@ const onRefresh = async () => {
                     <Text style={styles.nomessage}>No messages yet</Text>
                   ) : (
                     <FlatList
-                      data={messageList}
+                      data={messageList as MessageGroup[]}
                       keyExtractor={(item, index) => {
                         const key = item.latest && item.latest.id ? `key-${item.latest.id}` : `key-${index}`;
                         return key;
@@ -626,13 +752,40 @@ const onRefresh = async () => {
         placeholder="Enter your last name"
       />
       <Text style={styles.label}>Phone Number:</Text>
+      <View style={styles.numbercontainer}>
       <TextInput
-        style={styles.input}
+        style={styles.numberinput}
         value={phoneNumber}
-        onChangeText={setPhoneNumber}
-        keyboardType="phone-pad"
-        placeholder="Enter your phone number"
+        onChangeText={(e) => {
+          // Remove all non-numeric characters
+          let numericValue = e.replace(/[^0-9]/g, '');
+
+          if (numericValue.startsWith('0') && numericValue.length > 1) {
+            numericValue = numericValue.slice(1);
+          }
+        
+          // Check that the cleaned number now starts with '9'
+          if (numericValue.length > 0 && numericValue[0] !== '9') {
+            return; // Discard input if it doesn't start with '9'
+          }
+
+          setPhoneNumber(numericValue);
+        }}
+        maxLength={10}    
+        // inputMode="numeric"  
+        keyboardType="numeric"
+        placeholder="912345678" // Adjust the placeholder
+        placeholderTextColor="#888"
       />
+      <View style={styles.countryCodeContainer}>
+        <TextInput
+          style={styles.countryCode}
+          editable={false} // Make it non-editable
+          value="+63" // Display the country code
+        />
+      </View>
+    </View>
+
       <Text style={styles.label}>Address:</Text>
       <View style={styles.pickerContainer}>
         <Picker
@@ -668,6 +821,9 @@ const onRefresh = async () => {
           duration={3000}
           onDismiss={() => setShowAlert(false)}/>)}
       </TouchableOpacity>
+      <View style={styles.footercontainer}> 
+        <Text style={styles.footerText}>Created By: Brix Jay A. Nucos BSIS</Text> 
+        </View>
       </View>
     </ScrollView>
   );
@@ -675,6 +831,21 @@ const onRefresh = async () => {
 export default UserDetailsScreen;
 
 const styles = StyleSheet.create({
+  scrollview: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    marginTop: 10,
+  },
+  footercontainer: { 
+    flex: 1, 
+    justifyContent: 'flex-end', 
+    alignItems: 'center', 
+    paddingBottom: 20, // Adjust padding as needed 
+    }, 
+  footerText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+  },
   form: {
     marginBottom: 20,
     backgroundColor: '#fff',
@@ -686,6 +857,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 5,
+  },
+  numbercontainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    overflow: 'hidden', // Ensure the border wraps around both inputs
+    backgroundColor: '#f5f5f5',
+  },
+  numberinput: {
+    flex: 1,
+    padding: 10,
+    paddingLeft: 40, // Add padding to prevent text from overlapping the country code
+    fontSize: 19,
+  },
+  countryCodeContainer: {
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    backgroundColor: '#f5f5f5', // Background color to match the input
+    zIndex: 1, // Ensure it stays above the input
+  },
+  countryCode: {
+    fontSize: 19,
+    width: 30, // Fixed width to ensure consistent layout
+    textAlign: 'center', // Center the text
+    color: '#1F1F1F', // Black text color
   },
   input: {
     borderWidth: 1,
@@ -897,6 +1096,10 @@ const styles = StyleSheet.create({
   noMessageText: {
     fontSize: 18,
     color: '#888',  // A subtle gray color
+    fontWeight: 'bold',
+  },
+  warningText: {
+    color: '#FF0000', // Red color for warning
     fontWeight: 'bold',
   },
   

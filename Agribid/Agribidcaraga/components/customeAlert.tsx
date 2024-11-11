@@ -1,7 +1,14 @@
+// CustomAlert.tsx
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 
-const CustomAlert = ({ message, duration, onDismiss }) => {
+interface CustomAlertProps {
+  message: string;
+  duration: number;
+  onDismiss: () => void;
+}
+
+const CustomAlert: React.FC<CustomAlertProps> = ({ message, duration, onDismiss }) => {
   const fadeAnim = new Animated.Value(1);
 
   useEffect(() => {
@@ -28,13 +35,15 @@ const CustomAlert = ({ message, duration, onDismiss }) => {
 const styles = StyleSheet.create({
   alertContainer: {
     position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
+    top: '50%', // Center vertically
+    left: '50%', // Center horizontally
+    width: '100%', // Make the alert container take up 100% width
     padding: 10,
     backgroundColor: 'green',
     zIndex: 1000,
     alignItems: 'center',
+    transform: [{ translateX: -200 }], // Adjust horizontally to center
+    borderRadius: 5, // Optional: rounded corners
   },
   alertText: {
     color: 'white',
