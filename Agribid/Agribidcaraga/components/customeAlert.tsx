@@ -1,6 +1,6 @@
 // CustomAlert.tsx
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 
 interface CustomAlertProps {
   message: string;
@@ -37,14 +37,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%', // Center vertically
     left: '50%', // Center horizontally
-    width: '100%', // Make the alert container take up 100% width
+    width: '80%', // Set a responsive width
     padding: 10,
     backgroundColor: 'green',
     zIndex: 1000,
     alignItems: 'center',
-    transform: [{ translateX: -200 }], // Adjust horizontally to center
-    borderRadius: 5, // Optional: rounded corners
-  },
+    transform: [{ translateX: -Dimensions.get('window').width * 0.4 }, { translateY: -25 }], // Center on the screen
+    borderRadius: 5,
+  },    
   alertText: {
     color: 'white',
     fontSize: 16,

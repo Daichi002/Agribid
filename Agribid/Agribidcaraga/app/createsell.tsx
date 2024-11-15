@@ -328,7 +328,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
         console.log('FormData:', JSON.stringify(formData)); // Log FormData for debugging
   
         // Make the API call to store the product
-        const response = await axios.post("http://10.0.2.2:8000/api/store", formData, {
+        const response = await axios.post("http://192.168.31.160:8000/api/store", formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${token}`,
@@ -516,15 +516,26 @@ const styles = StyleSheet.create({
     borderRadius: 5, // Rounded corners for the container
     overflow: 'hidden',
 },
-  backButton: {
-    marginBottom: 20,
-  },
-  backButtonText: {
-    color: '#007bff',
-    fontSize: 18,
-  },
+backButton: {
+  backgroundColor: '#28a745', // Blue background for the button
+  paddingVertical: 10, // Add vertical padding for button size
+  paddingHorizontal: 20, // Add horizontal padding for button size
+  borderRadius: 5, // Rounded corners
+  marginBottom: 20, // Maintain the space below
+  alignItems: 'center', // Center text horizontally inside button
+  justifyContent: 'center', // Center the text vertically inside the button
+  flexDirection: 'row', // Ensure the text is in a row (useful if you add icons)
+  alignSelf: 'flex-start', // Align the button to the start of its container
+},
+
+backButtonText: {
+  color: '#ffffff', // White text color
+  fontSize: 18, // Text size
+  fontWeight: 'bold', // Make the text bold
+},
+
   post: {
-    backgroundColor: '#32DF81',
+    backgroundColor: '#28a745',
     padding: 10,
     borderRadius: 8,
     alignItems: 'center',
@@ -606,7 +617,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   imageUploadButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#0c969c',
     padding: 10,
     borderRadius: 8,
     alignItems: 'center',

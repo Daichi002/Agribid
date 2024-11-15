@@ -82,7 +82,7 @@ const RenderMessage: React.FC<RenderMessageProps> = React.memo(({ item, currentU
     if (uri && (uri.endsWith('.jpg') || uri.endsWith('.jpeg') || uri.endsWith('.png') || uri.endsWith('.gif'))) {
       // Construct full URL if needed
       if (!uri.startsWith('http')) {
-        uri = `http://10.0.2.2:8000/storage/message/images/${uri}`;
+        uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}`;
       }
   
       setLoading(true);
@@ -178,7 +178,14 @@ const MessageScreen2 = ( ) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [currentUserId, setCurrentUserId] = useState();
-  const [sender, setSender] = useState();
+  interface Sender {
+    id: string;
+    Firstname: string;
+    Lastname: string;
+    Address?: string;
+  }
+  
+  const [sender, setSender] = useState<Sender | null>(null);
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef(null);
   const { productId, senderId, receiverId, sessions } = useLocalSearchParams();
@@ -209,7 +216,7 @@ interface SendMessageParams {
   // Function to set image URI and open modal
   const OriginalImage = async (uri: string) => {
     // Construct the full image URI
-    const fullUri = `http://10.0.2.2:8000/storage/message/images/${uri}?${new Date().getTime()}`;
+    const fullUri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}?${new Date().getTime()}`;
     console.log('Image URI:', fullUri); // Log the image URI for debugging
 
     await loadImage(fullUri); // Load the image
@@ -257,7 +264,7 @@ useEffect(() => {
 
     // Check if the current user is the intended receiver
     if (receiverId && currentUserId && parseInt(receiverId) === parseInt(currentUserId)) {
-        console.log('New message for me:', messageContent);
+        // console.log('New message for me:', messageContent);
         // Trigger the fetchMessages() function to get updated messages
          // Ensure prevMessages is an array and messageContent is properly added
          setMessages((prevMessages: any[]) => Array.isArray(prevMessages) ? [...prevMessages, messageContent] : [messageContent]);
@@ -285,6 +292,7 @@ useEffect(() => {
  // Function to handle sending message
     const handleSendMessage = () => {
       const paramsToSend = {
+        id: '', // Add a valid id value here
         productId: Array.isArray(productId) ? parseInt(productId[0]) : parseInt(productId),
         senderId: Array.isArray(senderId) ? parseInt(senderId[0]) : parseInt(senderId),
         receiverId: Array.isArray(receiverId) ? parseInt(receiverId[0]) : parseInt(receiverId),
@@ -316,7 +324,7 @@ useEffect(() => {
           sessions: sessions // Assuming sessionId is available in the scope
         };
   
-        const response = await axios.get('http://10.0.2.2:8000/api/getmessages', {
+        const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/getmessages', {
           params,
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -470,7 +478,7 @@ useEffect(() => {
     
         // console.log('message data', productId, senderId, receiverId, sessions);
     
-        const responseCheck = await axios.get('http://10.0.2.2:8000/api/messages/session', {
+        const responseCheck = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/session', {
           params: {
             product_id: productId,
             sender_id: senderId,
@@ -481,7 +489,7 @@ useEffect(() => {
     
         let session = responseCheck.data.session;
         if (!session) {
-          const responseMaxSession = await axios.get('http://10.0.2.2:8000/api/messages/max-session', {
+          const responseMaxSession = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/max-session', {
             headers: { Authorization: `Bearer ${token}` },
           });
           session = responseMaxSession.data.maxSession + 1;
@@ -491,7 +499,7 @@ useEffect(() => {
     
         // console.log('Final message data to send:', formData);
     
-        const response = await axios.post('http://10.0.2.2:8000/api/messages', formData, {
+        const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/messages', formData, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',
@@ -605,7 +613,7 @@ useEffect(() => {
           return;
         }
   
-        const response = await axios.get(`http://10.0.2.2:8000/api/receiver/${senderId}`, {
+        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/receiver/${senderId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -690,6 +698,12 @@ const handlelink = (url: string) => {
 };
 
   
+const GotoUserprofile = () => {
+  if (sender?.id) {
+    console.log('Navigating to user profile:', sender?.id);
+    navigation.navigate('userproduct', { userId: sender?.id });
+  }
+};
 
   
   return (
@@ -701,9 +715,11 @@ const handlelink = (url: string) => {
   </TouchableOpacity>
 
   {/* Title (Receiver's Name) */}
+  <TouchableOpacity onPress={GotoUserprofile}>
   <Text style={styles.receiverNameheader}>
     {sender?.Firstname} {sender?.Lastname}
   </Text> 
+  </TouchableOpacity>
 
   {/* Menu Icon */}
   <TouchableOpacity onPress={() => setReportModalVisible(true)} style={styles.menuButton}>
@@ -887,7 +903,8 @@ receiverNameheader: {
   fontWeight: 'bold',
   textAlign: 'center', // Center the name text
   paddingRight: 'auto', // Add padding to prevent overlap with menu icon
-  marginRight: 'auto', // Add margin to prevent overlap with menu icon
+  marginRight: 'auto', // Add margin to prevent overlap with menu 
+  paddingTop: 20,
 },
 
 receiverName: {

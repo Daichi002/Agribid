@@ -6,6 +6,7 @@ import axios from "axios";
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { icons } from "../../constants";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const cacheImage = async (uri: string) => {
   const filename = uri.split('/').pop();
@@ -47,7 +48,7 @@ const ProductItem = React.memo(({ item }: ProductItemProps) => {
   useEffect(() => {
     const loadImage = async () => {
       try {
-        const uri = `http://10.0.2.2:8000/storage/product/images/${item.image}`;
+        const uri = `http://192.168.31.160:8000/storage/product/images/${item.image}`;
         const cachedUri = await cacheImage(uri);
         setImageUri(cachedUri);
       } catch (error) {
@@ -109,7 +110,7 @@ const Srp = () => {
         return;
       }
   
-      const response = await axios.get(`http://10.0.2.2:8000/api/products`, {
+      const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/products`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -193,7 +194,7 @@ const onRefresh = useCallback(async () => {
 }, []);
 
   return (
-    <View>
+    <SafeAreaView style={styles.container}>
 <FlatList
   data={sortedSrp}
   renderItem={({ item }) => <ProductItem item={item} />} 
@@ -207,7 +208,7 @@ const onRefresh = useCallback(async () => {
     />
   }
 />
-    </View>
+    </SafeAreaView>
   )
 }
 
@@ -216,7 +217,7 @@ export default Srp;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 10,
+    padding: 5,
     backgroundColor: "#f0f0f0",
   },
   viewButton: {

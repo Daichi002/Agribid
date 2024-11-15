@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, Image, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, Image, ActivityIndicator, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
@@ -22,6 +22,9 @@ interface Product {
   price: number;
   locate: string;
 }
+
+const screenWidth = Dimensions.get('window').width;
+const screenHeight = Dimensions.get('window').height;
 
 // Cache image function
 const cacheImage = async (uri: string) => {
@@ -58,7 +61,7 @@ const UserProduct = () => {
         }
 
         // Fetch user products
-        const response = await axios.get(`http://10.0.2.2:8000/api/userproduct/${userId}`, {
+        const response = await axios.get(`http://192.168.31.160:8000/api/userproduct/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -68,7 +71,7 @@ const UserProduct = () => {
 
         // Preload product images
         const uriPromises = products.map(async (product: { image: any; id: any; }) => {
-          const uri = `http://10.0.2.2:8000/storage/product/images/${product.image}`;
+          const uri = `http://192.168.31.160:8000/storage/product/images/${product.image}`;
           const cachedUri = await cacheImage(uri);
           return { id: product.id, uri: cachedUri };
         });
@@ -77,7 +80,7 @@ const UserProduct = () => {
 
         // Fetch ratings for all products
         const productsWithRatings = await Promise.all(products.map(async (product: { id: any; }) => {
-          const ratingsResponse = await axios.get(`http://10.0.2.2:8000/api/productrating/${product.id}`, {
+          const ratingsResponse = await axios.get(`http://192.168.31.160:8000/api/productrating/${product.id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
 
@@ -214,6 +217,11 @@ const UserProduct = () => {
         renderItem={renderProductItem}
         numColumns={2} // Set the number of columns to 2
         contentContainerStyle={styles.flatListContent}
+        ListEmptyComponent={
+          <View style={styles.emptyListContainer}>
+            <Text style={styles.emptyListText}>This user has not posted any products yet.</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -225,7 +233,7 @@ export default UserProduct;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    padding: 10,
     backgroundColor: '#f2f2f2',
   },
   headerContainer: {
@@ -283,38 +291,43 @@ const styles = StyleSheet.create({
     paddingTop: 8, // Add some space at the top of the FlatList
   },
   productItem: {
-    width: 180, // Set width to 190 for better spacing
+    width: screenWidth * 0.45,
+    maxWidth: 300,
+    minWidth: 150,
     marginBottom: 10,
     marginRight: 10,
     backgroundColor: "#fff",
-    padding: 15, // Increase padding for better spacing
-    borderRadius: 10, // More rounded corners
+    padding: 15,
+    paddingHorizontal: 10,  // Add horizontal padding to balance content inside
+    borderRadius: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.2, // Slightly increase shadow opacity for more depth
-    shadowRadius: 10, // Increase shadow radius for a softer look
-    shadowOffset: { width: 0, height: 5 }, // Higher shadow offset for elevation
-    alignItems: 'center',
-    elevation: 5, // Add elevation for Android shadow
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 5,
+    alignItems: 'center',         // Center items horizontally in container
+    // justifyContent: 'center',      // Center items vertically if needed
   },
-  productdetailscontainer:{
-    width: '100%',  // Ensure width is not too small
-    height: '100%', // Ensure height is not too small
-    marginRight: 5,
+  productdetailscontainer: {
+    width: '100%',
     flex: 1,
-  },
-  imagecontainer:{
-    width: 160,  // Ensure width is not too small
-    height: 180, 
     marginRight: 5,
+    // alignItems: 'center',         // Center items horizontally in container if needed
+  },
+  imagecontainer: {
+    width: screenWidth * 0.4,
+    height: screenHeight * 0.25,
+    maxHeight: 200,
+    marginRight: 5,
+    alignItems: 'center',         // Ensure image content is centered
   },
   productImage: {
-    width: '100%',  // Ensure width is not too small
-    height: '100%', // Ensure height is not too small
+    width: '100%',
+    height: '100%',
     resizeMode: 'cover',
-    borderRadius: 5, // Optional: rounded corners
-    marginRight: 10, // Space between image and text
-    backgroundColor: '#e0e0e0', // Optional: a background color to debug
-  },
+    borderRadius: 5,
+    backgroundColor: '#e0e0e0',
+  },  
   productTitle: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -361,5 +374,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center', // Center vertically
     alignItems: 'center', // Center horizontally
     backgroundColor: '#fff', // Optional: Set a background color
+  },
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyListText: {
+    fontSize: 16,
+    color: '#666', // Subtle color for the text
   },
 });

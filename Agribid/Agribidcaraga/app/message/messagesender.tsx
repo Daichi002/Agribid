@@ -104,7 +104,7 @@ const RenderMessage = React.memo(({ item, currentUserId, OriginalImage, handleli
     if (uri && (uri.endsWith('.jpg') || uri.endsWith('.jpeg') || uri.endsWith('.png') || uri.endsWith('.gif'))) {
       // Construct full URL if needed
       if (!uri.startsWith('http')) {
-        uri = `http://10.0.2.2:8000/storage/message/images/${uri}`;
+        uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}`;
       }
   
       setLoading(true);
@@ -226,7 +226,7 @@ const MessageScreen = () => {
   // Function to set image URI and open modal
   const OriginalImage = async (uri: string) => {
     // Construct the full image URI
-    const fullUri = `http://10.0.2.2:8000/storage/message/images/${uri}?${new Date().getTime()}`;
+    const fullUri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}?${new Date().getTime()}`;
     console.log('Image URI:', fullUri); // Log the image URI for debugging
 
     await loadImage(fullUri); // Load the image
@@ -320,7 +320,7 @@ useEffect(() => {
 
     // Check if the current user is the intended receiver
     if (currentUserId !== null && parseInt(receiverId) === parseInt(currentUserId)) {
-        console.log('New message for me:', messageContent);
+        // console.log('New message for me:', messageContent);
         // Trigger the fetchMessages() function to get updated messages
       // Ensure prevMessages is an array and messageContent is properly added
       setMessages((prevMessages: any[]) => Array.isArray(prevMessages) ? [...prevMessages, messageContent] : [messageContent]);
@@ -366,7 +366,7 @@ useEffect(() => {
           receiverId: productuserId,
         };
   
-        const response = await axios.get(`http://10.0.2.2:8000/api/getmessagesender`, {
+        const response = await axios.get(`http://192.168.31.160:8000/api/getmessagesender`, {
           params,
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -521,7 +521,7 @@ const sendMessage = async () => {
     // console.log('newmessage', newMessage)
 
     // Check for an existing session
-    const responseCheck = await axios.get('http://10.0.2.2:8000/api/messages/session', {
+    const responseCheck = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/session', {
       params: {
         product_id: productId,
         sender_id: currentUserId,
@@ -532,7 +532,7 @@ const sendMessage = async () => {
 
     let session = responseCheck.data.session;
     if (!session) {
-      const responseMaxSession = await axios.get('http://10.0.2.2:8000/api/messages/max-session', {
+      const responseMaxSession = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/max-session', {
         headers: { Authorization: `Bearer ${token}` },
       });
       session = responseMaxSession.data.maxSession + 1;
@@ -541,7 +541,7 @@ const sendMessage = async () => {
     formData.append('sessions', session);
 
     // Send the message
-    const response = await axios.post('http://10.0.2.2:8000/api/messages', formData, {
+    const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/messages', formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data',
@@ -616,7 +616,7 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
           return;
         }
   
-        const response = await axios.get(`http://10.0.2.2:8000/api/receiver/${productuserId}`, {
+        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/receiver/${productuserId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -705,6 +705,13 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
       );
     }
   };
+
+  const GotoUserprofile = () => {
+    if (receiver?.id) {
+      console.log('Navigating to user profile:', receiver?.id);
+      navigation.navigate('userproduct', { userId: receiver?.id });
+    }
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -716,9 +723,11 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
   </TouchableOpacity>
 
   {/* Title (Receiver's Name) */}
+  <TouchableOpacity onPress={GotoUserprofile}>
   <Text style={styles.receiverNameheader}>
     {receiver?.Firstname} {receiver?.Lastname}
   </Text> 
+  </TouchableOpacity>
 
   {/* Menu Icon */}
   <TouchableOpacity onPress={() => setReportModalVisible(true)} style={styles.menuButton}>
@@ -892,6 +901,7 @@ receiverNameheader: {
   textAlign: 'center', // Center the name text
   paddingRight: 'auto', // Add padding to prevent overlap with menu icon
   marginRight: 'auto', // Add margin to prevent overlap with menu icon
+  paddingTop: 20,
 },
 receiverName: {
   fontSize: 18,

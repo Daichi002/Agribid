@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, Image, FlatList, RefreshControl, TouchableOpacity, Alert, SafeAreaView, Modal } from 'react-native';
+import { StyleSheet, View, Text, Image, FlatList, RefreshControl, TouchableOpacity, Alert, SafeAreaView, Modal, Dimensions } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { useRef } from 'react';
@@ -7,6 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { icons } from "../../constants";
 import { useRouter } from 'expo-router';
+
+const screenWidth = Dimensions.get('window').width;
+const screenHeight = Dimensions.get('window').height;
 
 const cacheImage = async (uri: string) => {
   const filename = uri.split('/').pop();
@@ -43,7 +46,7 @@ const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }: Produ
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `http://10.0.2.2:8000/storage/product/images/${item.image}`;
+      const uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/product/images/${item.image}`;
       const cachedUri = await cacheImage(uri);
       setImageUri(cachedUri);
       setLoading(false);
@@ -92,7 +95,7 @@ const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCoun
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `http://10.0.2.2:8000/storage/product/images/${item.image}`;
+      const uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/product/images/${item.image}`;
       const cachedUri = await cacheImage(uri);
       setImageUri(cachedUri);
       setLoading(false);
@@ -184,7 +187,7 @@ const Recents = () => {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await axios.get(`http://10.0.2.2:8000/api/user/products`, {
+      const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/user/products`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -207,7 +210,7 @@ const Recents = () => {
         return null; // Return null if no token
       }
 
-      const response = await axios.get('http://10.0.2.2:8000/api/user/productmessage', {
+      const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/user/productmessage', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -312,7 +315,7 @@ const Recents = () => {
         <View style={styles.messageContainer}>
           <Text style={styles.senderName}>{displayName || 'Unknown'}</Text>
           <View style={styles.messageRow}>
-            <Text style={styles.messageText}>
+            <Text style={styles.messageText} numberOfLines={1}>
               {isImageUrl(latestMessage.text) ? 'Image' : (latestMessage.text || 'No message content')}
             </Text>
             <Text style={styles.messageTime}>
@@ -357,7 +360,7 @@ const Recents = () => {
       }
 
       const fetchMessagesForProduct = async (productId: number) => {
-        const response = await axios.get('http://10.0.2.2:8000/api/messageslist', {
+        const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messageslist', {
           params: { productId },
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -481,7 +484,7 @@ const Recents = () => {
               if (!token) return;
 
               await axios.put(
-                `http://10.0.2.2:8000/api/products/${product.id}/live`,
+                `https://trusting-widely-goldfish.ngrok-free.app/api/products/${product.id}/live`,
                 { live: false },
                 {
                   headers: {
@@ -504,58 +507,80 @@ const Recents = () => {
     );
   };
 
-  const lastFetchTime = useRef(0);  // To track the last fetch time
-const debounceDelay = 10000;  // 10 seconds to wait between fetches
-
-const onRefreshProducts = async () => {
-  // Check if enough time has passed since the last fetch to avoid 429
-  const currentTime = Date.now();
-  if (currentTime - lastFetchTime.current > debounceDelay) {
-    setIsRefreshing(true);
-    await fetchProducts();
-    setIsRefreshing(false);
-    lastFetchTime.current = currentTime;
-  } else {
-    console.log('Fetch skipped to prevent 429');
-  }
-};
-
-const fetchData = async () => {
-  console.log('Fetching data...');
-  await fetchProducts();
-  await fetchMessages();
-  await fetchMessagelist();
-};
-
-useEffect(() => {
-  const executeFetch = async () => {
-    if (isFocused) {
-      const currentTime = Date.now();
-      if (currentTime - lastFetchTime.current > debounceDelay) {
-        setLoading(true);
-        await fetchData();
-        setLoading(false);
-        lastFetchTime.current = currentTime;
-      } else {
-        console.log('Fetch skipped to prevent 429');
-      }
+  const lastFetchProductTime = useRef(0);
+  const lastFetchMessageTime = useRef(0);
+  const productDebounceDelay = 10000; // 10 seconds for products
+  const messageDebounceDelay = 5000;  // 5 seconds for messages
+  
+  const fetchProductsData = async () => {
+    const currentTime = Date.now();
+    if (currentTime - lastFetchProductTime.current > productDebounceDelay) {
+      console.log('Fetching products...');
+      await fetchProducts();
+      lastFetchProductTime.current = currentTime;
+    } else {
+      console.log('Product fetch skipped to prevent 429');
     }
   };
+  
+  const fetchMessagesData = async () => {
+    const currentTime = Date.now();
+    if (currentTime - lastFetchMessageTime.current > messageDebounceDelay) {
+      console.log('Fetching messages...');
+      await fetchMessages();
+      await fetchMessagelist();
+      lastFetchMessageTime.current = currentTime;
+    } else {
+      console.log('Message fetch skipped to prevent 429');
+    }
+  };
+  
+  const fetchData = async () => {
+    await fetchProductsData();
+    await fetchMessagesData();
+  };
+  
 
-  executeFetch();
-}, [isFocused]);
+  useEffect(() => {
+    const executeFetch = async () => {
+      if (isFocused) {
+        setLoading(true);
+  
+        // Fetch data, but separate product and message fetching
+        await fetchData();
+  
+        setLoading(false);
+      }
+    };
+  
+    executeFetch();
+  }, [isFocused]);
+  
 
-const onRefreshMessages = async () => {
-  const currentTime = Date.now();
-  if (currentTime - lastFetchTime.current > debounceDelay) {
-    setIsRefreshingMessages(true);
-    await fetchData();
-    setIsRefreshingMessages(false);
-    lastFetchTime.current = currentTime;
-  } else {
-    console.log('Fetch skipped to prevent 429');
-  }
-};
+  const onRefreshProducts = async () => {
+    const currentTime = Date.now();
+    if (currentTime - lastFetchProductTime.current > productDebounceDelay) {
+      setIsRefreshing(true);
+      await fetchProducts();
+      setIsRefreshing(false);
+      lastFetchProductTime.current = currentTime;
+    } else {
+      console.log('Product fetch skipped to prevent 429');
+    }
+  };
+  
+  const onRefreshMessages = async () => {
+    const currentTime = Date.now();
+    if (currentTime - lastFetchMessageTime.current > messageDebounceDelay) {
+      setIsRefreshingMessages(true);
+      await fetchMessages();
+      setIsRefreshingMessages(false);
+      lastFetchMessageTime.current = currentTime;
+    } else {
+      console.log('Message fetch skipped to prevent 429');
+    }
+  };
+  
 
   const sortedpost = products.sort((a, b) => {
     const dateA = new Date(a.created_at).getTime();
@@ -701,7 +726,14 @@ const onRefreshMessages = async () => {
   <SafeAreaView style={styles.modalOverlay}>
     <View style={styles.modalView}>
        <View style={styles.messageheader}>
-        <Text style={styles.headerText}>Your Product Messages</Text>
+        <Text style={styles.headerText}>
+          Your Product      
+            <Image 
+                    source={icons.contact} 
+                    style={styles.icon}
+                    resizeMode="contain" // Ensure the image fits within the circular container
+                    //show the message count you have created so far if there are none it is hidden
+                  /> </Text>
             <View style={styles.modalButtonContainer}>
               <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
                 <Text style={styles.modalButtonText}>Close</Text>
@@ -738,7 +770,7 @@ const styles = StyleSheet.create({
   },
   transactionsContainer: {
     marginBottom: 20,
-    height: 380,
+    height: screenHeight * 0.4, // 40% of the screen height for the container
   },
   productItem: {
     flexDirection: 'row',
@@ -818,19 +850,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', // Space items out evenly
     alignItems: 'center', // Center items vertically
     padding: 10, // Add some padding for spacing
-    paddingLeft: 40,
+    paddingLeft: screenWidth * 0.03, // 10% of screen width for left padding (adjustable)
+    paddingRight: screenWidth * 0.001, // Add padding to the right side
+    width: '100%', // Ensure it takes up full width
     borderBottomWidth: 1, // Optional: Add border for separation
-    borderBottomColor: '#ccc', 
+    borderBottomColor: '#ccc',
   },
   headerText: {
     fontSize: 18,
     fontWeight: 'bold',
   },
   modalButtonContainer: {
-    // Move button to the right
-   marginTop: 10,
-   marginBottom: 10,
-   paddingLeft: 30,
+    marginTop: 10,
+    marginBottom: 10,
+    paddingLeft: screenWidth * 0.1, // 10% of screen width for left padding (adjustable)
+    paddingRight: screenWidth * 0.05, // Adjust the right padding for responsiveness
+    flexDirection: 'row', // Arrange the button and other elements horizontally
+    justifyContent: 'flex-end', // Align buttons to the right
  },
   modalButton: {
     backgroundColor: '#4CAF50', // Elegant green color
@@ -855,8 +891,9 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 5,
     borderRadius: 10,
-    width: '80%',            // Adjust width according to your needs
-    minWidth: 331,           // Ensure it doesn't shrink too much
+    width: screenWidth * 0.75, // Add padding to the right side
+    // width: '80%',            // Adjust width according to your needs
+    minWidth: 200,           // Ensure it doesn't shrink too much
     backgroundColor: '#ECECEC',
     flexShrink: 0,           // Prevent shrinking
   },

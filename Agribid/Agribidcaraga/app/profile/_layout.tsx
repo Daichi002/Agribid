@@ -1,6 +1,6 @@
 import { ImageSourcePropType, StatusBar } from "react-native";
-import { Tabs, Link } from "expo-router";
-import { SafeAreaView, Image, Text, View, StyleSheet, useWindowDimensions } from "react-native";
+import { Tabs} from "expo-router";
+import { SafeAreaView, Image, Text, View, StyleSheet,} from "react-native";
 import { icons } from "../../constants";
 
 // Define a type for your icons
@@ -24,15 +24,6 @@ const TabIcon: React.FC<IconProps> = ({ icon, name, focused }) => {
 const ProfileLayout = () => {
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header Section */}
-      {/* <View style={styles.header}>
-        <Link href="/sell">
-          <Image source={icons.Agribid} style={styles.logo} resizeMode="contain" />
-        </Link>
-        <Link href="/profile">
-          <Image source={icons.Profile} style={styles.profile} resizeMode="contain" />
-        </Link>
-      </View> */}
 
       {/* Tabs */}
       <Tabs
@@ -74,15 +65,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#161622',
-    marginTop: StatusBar.currentHeight || 0,
-  },
-  header: {
-    backgroundColor: '#7DC36B',
-    justifyContent: 'space-between',
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 150,
-    paddingHorizontal: 15,
   },
   logo: {
     width: 60,
@@ -113,6 +95,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 5,
     height: 60,
+    width: 150,
     paddingHorizontal: 25,
     paddingVertical: 20,
     borderColor: '#000000',

@@ -2,9 +2,11 @@
 import React from 'react'
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const authlayout = () => {
   return (
+    <SafeAreaView style={{flex: 1}}>
     <>
       <Stack>
       <Stack.Screen
@@ -26,6 +28,7 @@ const authlayout = () => {
       </Stack>
       <StatusBar backgroundColor="#161622" style='light' />
     </>
+    </SafeAreaView>
   )
 }
 

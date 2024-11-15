@@ -5,13 +5,14 @@
     "scheme": "Agribid",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "newArchEnabled": true,
+    "icon": "./assets/images/Agribid.png",
     "scripts": {
       "prebuild": "npx react-native link @pusher/pusher-websocket-react-native"
     },
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/Agribid.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,11 +21,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/Agribid.png",
         "backgroundColor": "#ffffff",
         "package": "com.agribid",
         "jsEngine": "jsc",
         "permissions": [],
+        "useNextNotificationsApi": true,
         "useCleartextTraffic": true,
         "scripts": {
           "prebuild": "npx react-native link @pusher/pusher-websocket-react-native"
@@ -38,7 +40,8 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

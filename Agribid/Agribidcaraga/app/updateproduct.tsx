@@ -1,15 +1,15 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, TextInput, ScrollView, Alert, Modal } from 'react-native';
 import React, { useState, useEffect } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import CustomAlert from '../components/customeAlert';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
-import { images } from "../constants";
+import { useAlert } from '../components/AlertContext';
 import { Picker } from '@react-native-picker/picker';
 
 interface Product {
@@ -41,6 +41,13 @@ const cacheImage = async (uri: string) => {
     }
   };
 
+  interface ImagePickerModalProps {
+    visible: boolean;
+    onChooseFromStorage: () => void;
+    onTakePhoto: () => void;
+    onClose: () => void;
+  }
+  
   const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ visible, onChooseFromStorage, onTakePhoto, onClose }) => {
     const takestorage = () => {
       onChooseFromStorage();
@@ -75,7 +82,7 @@ const UpdateProduct = () => {
   const route = useRoute();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const navigation = useNavigation();
-  const { productId } = route.params;
+  const { productId } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const categories = ["Fruits", "LiveStock & Poultry", "Fisheries", "Vegetable", "Crops"];
   const units = ["kg", "Pcs", "Trays", "Sacks"];
@@ -99,8 +106,8 @@ const UpdateProduct = () => {
   const [address, setAddress] = useState('');
   const [productData, setProductData] = useState<Product | null>(null);
   const [image, setImage] = useState<string | null>(null);
-  const [showAlert, setShowAlert] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const { showAlert } = useAlert();
 
   const [Barangays, setBarangays] = useState<Barangay[]>([]);
     const [selectedMunicipality, setSelectedMunicipality] = useState<string>('160202000');
@@ -192,7 +199,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
         console.error('No auth token found');
         return;
       }
-      const response = await axios.get(`http://10.0.2.2:8000/api/productdetails/${productId}`, {
+      const response = await axios.get(`http://192.168.31.160:8000/api/productdetails/${productId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -244,7 +251,7 @@ useEffect(() => {
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `http://10.0.2.2:8000/storage/product/images/${product?.image}?${new Date().getTime()}`;
+      const uri = `http://192.168.31.160:8000/storage/product/images/${product?.image}?${new Date().getTime()}`;
       setImageUri(await cacheImage(uri));
       setLoading(false);
     };
@@ -374,7 +381,7 @@ formData.append('updated_at', new Date().toISOString()); // Use ISO format for c
 console.log('FormData:', JSON.stringify(formData)); // Log FormData for debugging 
   
         // Make the API call to update the product
-        const response = await axios.post("http://10.0.2.2:8000/api/update", formData, {
+        const response = await axios.post("http://192.168.31.160:8000/api/update", formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${token}`,
@@ -384,12 +391,7 @@ console.log('FormData:', JSON.stringify(formData)); // Log FormData for debuggin
 
         console.log('Server response:', response.data);
         const productID = response.data.id;
-
-        setShowAlert(true);
-        setTimeout(() => {
-          setShowAlert(false);
-        }, 3000);
-  
+        showAlert('Product Updated successfully!', 3000);
         // Navigate back on successful update
         console.log('Product updated:', productID);
         navigation.navigate('ProductDetails', { productId: productID});
@@ -547,13 +549,6 @@ console.log('FormData:', JSON.stringify(formData)); // Log FormData for debuggin
       <View>
       <TouchableOpacity style={styles.button} onPress={UpdateProduct}>
           <Text style={styles.buttonText}>Post</Text>
-          {showAlert && (
-              <CustomAlert
-                  message="Product Created!"
-                  duration={3000}
-                  onDismiss={() => setShowAlert(false)}
-              />
-          )}
       </TouchableOpacity>
     </View>
     </ScrollView>
@@ -606,9 +601,14 @@ const styles = StyleSheet.create({
       paddingRight: 60,
     },
     backButton: {
+      marginBottom: 5,
+      backgroundColor: '#28a745', // Lighter background for a more elegant feel
+      borderRadius: 10, // Rounded corners for a softer appearance
       padding: 10,
-      backgroundColor: '#E0E0E0',
-      borderRadius: 8,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 100,
     },
     backButtonText: {
       color: '#333',

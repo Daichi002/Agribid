@@ -34,7 +34,7 @@ const Rating = () => {
         console.log('Submitted Rating:', rating, 'Review:', review);
 
         const response = await axios.post(
-            'http://10.0.2.2:8000/api/ratings',
+            'http://192.168.31.160:8000/api/ratings',
             {
                 rate: rating,             // Rating value
                 review: review,           // Optional review text

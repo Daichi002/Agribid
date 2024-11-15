@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, Image, TextInput } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Image, TextInput, TouchableOpacity } from 'react-native'
 import React, { useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from "expo-router";
@@ -47,7 +47,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-        const response = await axios.post('http://10.0.2.2:8000/api/login', {
+        const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/login', {
             Phonenumber: formattedPhonenumber,
             password: form.password
         }, {
@@ -62,6 +62,7 @@ const Login = () => {
           // Store token and user in AsyncStorage
           await AsyncStorage.setItem('authToken', token);
           await AsyncStorage.setItem('userInfo', JSON.stringify(user));
+          console.log("User Data:", response.data);
 
           // Log all user data to the console
           // console.log("User Data:", user);
@@ -110,8 +111,20 @@ const Login = () => {
     }
 };
 
+// Function to handle the reset and navigate
+const handleForgotPasswordClick = () => {
+  // Reset the form state
+  setform({
+    Phonenumber: '',
+    password: '',
+  });
+  
+  // Navigate to the ForgotPassword page
+  router.navigate('/ForgotPassword');
+};
+
   return (
-    <SafeAreaView style={{ backgroundColor: '#7DC36B', height: '100%' }}>
+    <SafeAreaView style={{ backgroundColor: '#7DC36B', height: '100%', padding: 10  }}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.logoContainer}>
           <Image source={icons.Agribid} style={styles.logo} />
@@ -169,11 +182,11 @@ const Login = () => {
           />
 
           <View style={styles.forgot}> 
-            <Link 
-              href='/ForgotPassword' 
-              style={styles.link}>
-              Forgot Password
-            </Link>
+          <TouchableOpacity 
+            onPress={handleForgotPasswordClick} // Trigger reset and navigation        
+          >
+            <Text  style={styles.link}>Forgot Password </Text>
+          </TouchableOpacity>
           </View>
 
         <CustomButton 
@@ -237,6 +250,7 @@ const styles = StyleSheet.create({
     // padding: 10,
     // paddingLeft: 30, // Add padding to prevent text from overlapping the country code
     fontSize: 16,
+    width: '100%',
   },
   numberinputplaceholder: {
     paddingLeft: 23, // Adjust the padding value as needed
@@ -245,14 +259,14 @@ const styles = StyleSheet.create({
   countryCodeContainer: {
     marginTop: 26,
     position: 'absolute',
-    left: 10,
-    top: 10,
+    left: 3,
+    top: 2,
     // backgroundColor: '#f5f5f5', // Background color to match the input
     zIndex: 1, // Ensure it stays above the input
   },
   countryCode: {
     fontSize: 16,
-    width: 30, // Fixed width to ensure consistent layout
+    width: 40, // Fixed width to ensure consistent layout
     textAlign: 'center', // Center the text
     color: '#1F1F1F', // Adjust the color as needed
   },

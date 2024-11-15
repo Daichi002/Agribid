@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, TextInput, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, ActivityIndicator} from "react-native";
+import { View, Text, TextInput, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, ActivityIndicator, Dimensions} from "react-native";
 import { Picker } from '@react-native-picker/picker';
 import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
@@ -10,7 +10,6 @@ import { icons } from "../../constants";
 import { FontAwesome } from '@expo/vector-icons';
 
 import * as FileSystem from 'expo-file-system';
-import ProductDetails from '../ProductDetails'; 
 
 interface Barangay {
   code: string;
@@ -37,6 +36,9 @@ interface ProductItemProps {
   handleViewDetails: (item: any) => void;
 }
 
+const screenWidth = Dimensions.get('window').width;
+const screenHeight = Dimensions.get('window').height;
+
 const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) =
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `http://10.0.2.2:8000/storage/product/images/${item.image}`;
+      const uri = `http://192.168.31.160:8000/storage/product/images/${item.image}`;
       setLoading(true);
       setError(false);
 
@@ -164,7 +166,6 @@ const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) =
 
 const Sell = () => {
  
-
   const [products, setProducts] = useState<Product[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -282,7 +283,7 @@ useEffect(() => {
     if (!isFetching.current) { // Ensure no ongoing fetch before triggering another
       fetchProducts(); // Fetch products from the server at intervals
     }
-  }, 10 * 60 * 1000); // 10 minutes in milliseconds
+  }, 1 * 60 * 1000); // 5 minutes in milliseconds
 
   return () => clearInterval(interval); // Clear the interval on component unmount
 }, []);
@@ -310,7 +311,7 @@ const fetchProducts = async () => {
       return;
     }
 
-    const response = await axios.get('http://10.0.2.2:8000/api/products', {
+    const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/products', {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -386,7 +387,7 @@ const fetchProductsRatings = async (productId: any) => {
       return {};
     }
 
-    const ratingsResponse = await axios.get(`http://10.0.2.2:8000/api/productrating/${productId}`, {
+    const ratingsResponse = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/productrating/${productId}`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -537,25 +538,27 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
 
   return (
     <View style={styles.container}>
-      {selectedProduct ? (
-        // error on product no idea how to resolve 
+      {/* {selectedProduct ? (
+        // error on productdetails no idea how to resolve 
         <ProductDetails product={selectedProduct} onBack={() => setSelectedProduct(null)} />
-      ) : (
+      ) : ( */}
         <>
           <View style={styles.dashboard}>
             {/* button to post navigate you to createsell page */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate("createsell" as never)}
-            style={styles.buttonContainer}
-        >
-            <Text style={styles.buttonText}>
-            <Image 
-              source={icons.create2} 
-              style={styles.icon}
-              resizeMode="contain" // Ensure the image fits within the circular container
-            /> 
-              Post</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => navigation.navigate("createsell" as never)}
+                style={styles.buttonContainer}
+              >
+                <View style={styles.buttonContent}>
+                  <Image 
+                    source={icons.create2} 
+                    style={styles.icon}
+                    resizeMode="contain"
+                  /> 
+                  <Text style={styles.buttonText}>Post</Text>
+                </View>
+              </TouchableOpacity>
+
         {/* for debugging pupose only */}
         {/* <TouchableOpacity
             onPress={removeProductsData}
@@ -594,6 +597,7 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
 >
   <View style={styles.modalOverlay}>
     <View style={styles.modalContainer}>
+
       <View style={styles.dropdownContainer}>
       <Picker
            selectedValue={selectedCategory}
@@ -616,7 +620,7 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
               {Object.entries(barangayLookup)
             .sort((a, b) => a[1].localeCompare(b[1])) // Sort alphabetically by name
             .map(([code, name]) => (
-              <Picker.Item key={code} label={name} value={code} style={{ fontSize: 19 }} />
+              <Picker.Item key={code} label={name} value={code} style={{ fontSize: 16 }} />
             ))}
           </Picker>
       </View>
@@ -637,13 +641,15 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
         showDoubleValue={true}
       />
     </View> */}
-      <TouchableOpacity onPress={() => applyBarangayFilter(selectedBarangay, selectedCategory)}>
-        <Text style={styles.closeButton}>Enter</Text>
-      </TouchableOpacity>
+      <View style={styles.closeButtonContainer}>
+        <TouchableOpacity onPress={() => applyBarangayFilter(selectedBarangay, selectedCategory)}>
+          <Text style={styles.closeButton}>Enter</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => setModalVisible(false)}>
-        <Text style={styles.closeButton}>Close</Text>
-      </TouchableOpacity>
+        <TouchableOpacity onPress={() => setModalVisible(false)}>
+          <Text style={styles.closeButton}>Close</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   </View>
 </Modal>
@@ -678,12 +684,6 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: "#f0f0f0",
   },
-  viewButton: {
-    backgroundColor: "black", // Background color
-    padding: 10,                // Padding inside the button
-    borderRadius: 5,            // Rounded corners
-    alignItems: "center",       // Center text horizontally
-  },
   buttonContainer: {
     backgroundColor: '#28a745',
     paddingVertical: 10,
@@ -696,21 +696,26 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
-},
+  },
+  
+  buttonContent: {
+    flexDirection: 'row',  // Align icon and text horizontally
+    alignItems: 'center',  // Center the icon and text vertically
+    justifyContent: 'center',  // Center the content horizontally
+  },
+  
   buttonText: {
-    flexDirection: 'row',
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-    paddingBottom: 5,
-    paddingLeft: 10,
-    width: 90,
-    height: 40,
+    marginLeft: 10,  // Space between the image and text
   },
+  
   icon: {
     width: 30,  // Adjust width as needed
     height: 30,  // Adjust height as needed
   },
+  
   subText: {
     marginTop: 10,
     fontSize: 14,
@@ -725,6 +730,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
+    height  : 50,
   },
   addProductLink: {
     fontSize: 16,
@@ -760,25 +766,56 @@ const styles = StyleSheet.create({
   },
   
   dropdownContainer: {
-    marginBottom: 15, // Add margin between dropdowns
+    marginBottom: 10, // Adds margin between dropdowns
+    alignItems: 'center', // Center the dropdown inside the container
+    justifyContent: 'center', // Center the dropdown vertically if necessary
   },
   
   picker: {
-    height: 40,
+    height: 60, // Increased height to allow room for descenders
     backgroundColor: '#B4CBB7',
     borderColor: 'black',
     borderWidth: 1,
-    textAlign: 'center',
+    textAlign: 'center', // Centers the text inside the Picker
     paddingHorizontal: 10,
-    marginVertical: 10,
+    width: '80%', // Adjust width to fit better within the container (optional)
+    marginVertical: 10, // Adds vertical margin for spacing
+    borderRadius: 5, // Adds border radius for rounded edges
+    overflow: 'visible', // Ensures text stays within bounds and is visible if it overflows
   },
   
-  closeButton: {
-    textAlign: 'center',
-    color: 'blue',
-    fontSize: 18,
-    marginTop: 10,
+  pickerItem: {
+    fontSize: 16, // Make sure the font size is readable
+    lineHeight: 24, // Add line height to give more space to the text (important for descenders)
+    overflow: 'visible', // Ensures the text is fully visible, even if it overflows
   },
+  
+  closeButtonContainer: {
+    marginTop: 10, // Add some space from the content above
+    width: '100%', // Ensure the container takes the full width
+    alignItems: 'center', // Center buttons horizontally
+    justifyContent: 'center', // Center buttons vertically if needed
+    gap: 20, // Space between buttons
+  },
+  
+  
+  closeButton: {
+    backgroundColor: '#28a745', // Button background color
+    color: '#FFFFFF', // Text color
+    fontSize: 18,
+    fontWeight: 'bold', // Make text bold
+    textAlign: 'center', // Center text inside button
+    paddingVertical: 10, // Add padding for button height
+    paddingHorizontal: 20, // Add padding for button width
+    borderRadius: 5, // Round the corners of the button
+    width: '45%', // Make the buttons take up 45% of the container's width
+    elevation: 3, // Add a shadow effect (for Android)
+    shadowColor: '#000', // Shadow color (for iOS)
+    shadowOffset: { width: 0, height: 2 }, // Shadow offset (for iOS)
+    shadowOpacity: 0.25, // Shadow opacity (for iOS)
+    shadowRadius: 3.84, // Shadow blur (for iOS)
+  },
+    
 
   searchSortFilter: {
     marginBottom: 20,
@@ -885,46 +922,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  productItem: {
-    // flexDirection: "row",
-    width: 190,
-    // width: '100%', // Ensure width is not too small
-    marginBottom: 10,
-    marginRight: 10,
-    backgroundColor: "#fff",
-    padding: 15, // Increase padding for better spacing
-    borderRadius: 10, // More rounded corners
-    shadowColor: "#000",
-    shadowOpacity: 0.2, // Slightly increase shadow opacity for more depth
-    shadowRadius: 10, // Increase shadow radius for a softer look
-    shadowOffset: { width: 0, height: 5 }, // Higher shadow offset for elevation
-    // alignItems: 'center',
-    elevation: 5, // Add elevation for Android shadow
-  },
-  productdetailscontainer:{
-    width: '100%',  // Ensure width is not too small
-    height: '100%', // Ensure height is not too small
-    marginRight: 5,
-    flex: 1,
-  },
-  imagecontainer:{
-    width: 160,  // Ensure width is not too small
-    height: 180, 
-    marginRight: 5,
-  },
-  imagePlaceholder: {
-    width: 160,  // Ensure width is not too small
-    height: 180, 
-    marginRight: 5,
-  },
-  productImage: {
-    width: '100%',  // Ensure width is not too small
-    height: '100%', // Ensure height is not too small
-    resizeMode: 'cover',
-    borderRadius: 5, // Optional: rounded corners
-    marginRight: 10, // Space between image and text
-    backgroundColor: '#e0e0e0', // Optional: a background color to debug
-  },
+    productItem: {
+      width: screenWidth * 0.45,
+      maxWidth: 300,
+      minWidth: 150,
+      marginBottom: 10,
+      marginRight: 10,
+      backgroundColor: "#fff",
+      padding: 15,
+      paddingHorizontal: 10,  // Add horizontal padding to balance content inside
+      borderRadius: 10,
+      shadowColor: "#000",
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 5 },
+      elevation: 5,
+      alignItems: 'center',         // Center items horizontally in container
+      // justifyContent: 'center',      // Center items vertically if needed
+    },
+    productdetailscontainer: {
+      width: '100%',
+      flex: 1,
+      marginRight: 5,
+      // alignItems: 'center',         // Center items horizontally in container if needed
+    },
+    imagecontainer: {
+      width: screenWidth * 0.4,
+      height: screenHeight * 0.25,
+      maxHeight: 200,
+      marginRight: 5,
+      alignItems: 'center',         // Ensure image content is centered
+    },
+    imagePlaceholder: {
+      width: screenWidth * 0.4,
+      height: screenHeight * 0.25,
+      maxHeight: 200,
+      marginRight: 5,
+      alignItems: 'center',         // Ensure image content is centered
+    },
+    productImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+      borderRadius: 5,
+      backgroundColor: '#e0e0e0',
+    },  
   productTitle: {
     fontSize: 16,
     fontWeight: 'bold',

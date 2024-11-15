@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, Alert, ScrollView, Image, Modal, FlatList, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, Alert, ScrollView, Image, Modal, FlatList, RefreshControl, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation,  useFocusEffect  } from '@react-navigation/native';
 import axios from 'axios';
@@ -8,6 +8,8 @@ import CustomAlert from '../../components/customeAlert';
 
 import { icons } from "../../constants";
 import { router } from 'expo-router';
+
+const screenWidth = Dimensions.get('window').width;
 
 interface Barangay {
   code: string;
@@ -31,6 +33,7 @@ interface MessageGroup {
     sessions: any;
     sender: any;
     receiver: any;
+    product: any;
     created_at: string;
   };
   latest: {
@@ -132,7 +135,7 @@ const handleLogout = () => {
 
             console.log('Token:', token);
 
-            const response = await axios.post('http://10.0.2.2:8000/api/logout', {}, {
+            const response = await axios.post('http://192.168.31.160:8000/api/logout', {}, {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
@@ -241,7 +244,7 @@ useEffect(() => {
   : `+63${phoneNumber}`;
 
    // Check if the phone number already exists
-   const checkResponse = await axios.get('http://10.0.2.2:8000/api/check-phone', {
+   const checkResponse = await axios.get('http://192.168.31.160:8000/api/check-phone', {
     params: { Phonenumber: formattedPhonenumber, currentUserId },
     headers: { 'Content-Type': 'application/json' },
   });
@@ -333,7 +336,8 @@ useEffect(() => {
   const renderMessage = ({ item, index }: { item: MessageGroup, index: number }) => {
     const { first, latest } = item;
     const isRead = readStates[index] || (Number(latest?.sender_id) === currentUserId); // Mark as read if sender is the current user
-      
+    const uri = `http://192.168.31.160:8000/storage/product/images/${first.product.image}`;
+
       let firstObj;
   
     try {
@@ -379,7 +383,7 @@ useEffect(() => {
       const messageId = latest.id;
 
       const response = await axios.post(
-        `http://10.0.2.2:8000/api/message/${messageId}/mark-read`,
+        `http://192.168.31.160:8000/api/message/${messageId}/mark-read`,
         {}, // Empty object for data since this is a POST without a body
         {
           headers: {
@@ -418,25 +422,30 @@ useEffect(() => {
       const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
       return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
     };
+    
     return (
       <TouchableOpacity 
         onPress={() => handleNotificationClick(index)}
         style={[styles.messageContainer, { backgroundColor: notificationBackgroundColor }]}
       >
-        <View >
-          <Text style={styles.senderName}>
-            {displayName || 'Unknown'}
-          </Text>
-          <View style={styles.messageRow}>
-            <Text style={styles.usermessageText}>
+          <View style={styles.textContainer}>
+            <Text style={styles.senderName}>
+              {displayName || 'Unknown'}
+            </Text>
+            <View style={styles.messageRow}>
+            <Text style={styles.usermessageText} numberOfLines={1}>
               {isImageUrl((latest as any)?.text ?? '') ? 'Image' : ((latest as any)?.text || 'No message content')}
             </Text>
-            <Text style={styles.messageTime}>
-              {latest && typeof latest === 'object' && 'created_at' in latest ? formatTime(
-                (latest as { created_at: string }).created_at) : 'No message content'}
-            </Text>
+              <Text style={styles.messageTime}>
+                {latest && 'created_at' in latest ? formatTime((latest as { created_at: string }).created_at) : 'No message content'}
+              </Text>
+            </View>
           </View>
-        </View>
+          <Image
+            source={{ uri }}  // Use the uri for the image
+            style={styles.messageImage} // Styling the image
+            onError={() => console.error('Error loading image')}
+          />
       </TouchableOpacity>
     );
   };
@@ -515,7 +524,7 @@ useEffect(() => {
         return;
       }
   
-      const response = await axios.get('http://10.0.2.2:8000/api/messageslistUser', {
+      const response = await axios.get('http://192.168.31.160:8000/api/messageslistUser', {
         params: { userId },
         headers: { Authorization: `Bearer ${token}` },
         timeout: 10000,
@@ -651,17 +660,23 @@ useEffect(() => {
 
   return (
         <ScrollView style={styles.scrollview}>
+
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.GoButton} onPress={() => { 
-                router.navigate("/sell");
-                // navigation.goBack();
-            }}>
+          <TouchableOpacity
+            style={styles.GoButton}
+            onPress={() => {
+              router.navigate("/sell");
+              // navigation.goBack();
+            }}
+          >
             <Text style={styles.saveText}>
-            <Image 
-              source={icons.leftArrow} 
-              style={styles.icon}
-              resizeMode="contain" // Ensure the image fits within the circular container
-            />  Go Back</Text>
+              <Image
+                source={icons.leftArrow}
+                style={styles.icon}
+                resizeMode="contain"
+              />
+              Go Back
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -669,16 +684,19 @@ useEffect(() => {
             onPress={() => {
               setModalVisible(true);
               fetchMessages(); // Re-run the fetch every time button is clicked
-              }}>    
+            }}
+          >
             <Text style={styles.messageText}>
-              <Image 
-               source={iconSource} 
-              style={styles.icon}
-              resizeMode="contain" // Ensure the image fits within the circular container
-            />
-            Messages</Text>
+              <Image
+                source={iconSource}
+                style={styles.icon}
+                resizeMode="contain"
+              />
+              Messages
+            </Text>
           </TouchableOpacity>
         </View>
+
         {/* this is the message modal  */}
         <Modal
           animationType="slide"
@@ -753,38 +771,39 @@ useEffect(() => {
       />
       <Text style={styles.label}>Phone Number:</Text>
       <View style={styles.numbercontainer}>
-      <TextInput
-        style={styles.numberinput}
-        value={phoneNumber}
-        onChangeText={(e) => {
-          // Remove all non-numeric characters
-          let numericValue = e.replace(/[^0-9]/g, '');
+        <View style={styles.countryCodeContainer}>
+          <TextInput
+            style={styles.countryCode}
+            editable={false} // Non-editable field for the country code
+            value="+63" // Display the country code
+          />
+        </View>
 
-          if (numericValue.startsWith('0') && numericValue.length > 1) {
-            numericValue = numericValue.slice(1);
-          }
-        
-          // Check that the cleaned number now starts with '9'
-          if (numericValue.length > 0 && numericValue[0] !== '9') {
-            return; // Discard input if it doesn't start with '9'
-          }
-
-          setPhoneNumber(numericValue);
-        }}
-        maxLength={10}    
-        // inputMode="numeric"  
-        keyboardType="numeric"
-        placeholder="912345678" // Adjust the placeholder
-        placeholderTextColor="#888"
-      />
-      <View style={styles.countryCodeContainer}>
         <TextInput
-          style={styles.countryCode}
-          editable={false} // Make it non-editable
-          value="+63" // Display the country code
+          style={styles.numberinput}
+          value={phoneNumber}
+          onChangeText={(e) => {
+            // Remove all non-numeric characters
+            let numericValue = e.replace(/[^0-9]/g, '');
+
+            if (numericValue.startsWith('0') && numericValue.length > 1) {
+              numericValue = numericValue.slice(1);
+            }
+
+            // Check that the cleaned number now starts with '9'
+            if (numericValue.length > 0 && numericValue[0] !== '9') {
+              return; // Discard input if it doesn't start with '9'
+            }
+
+            setPhoneNumber(numericValue);
+          }}
+          maxLength={10}
+          keyboardType="numeric"
+          placeholder="912345678" // Adjust the placeholder
+          placeholderTextColor="#888"
         />
       </View>
-    </View>
+
 
       <Text style={styles.label}>Address:</Text>
       <View style={styles.pickerContainer}>
@@ -866,26 +885,33 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     overflow: 'hidden', // Ensure the border wraps around both inputs
     backgroundColor: '#f5f5f5',
+    height: 50, // Set a fixed height to avoid layout issues
   },
+  
+  countryCodeContainer: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0, // Make it stretch to the full height
+    backgroundColor: '#f5f5f5', // Match the background color of the input
+    justifyContent: 'center', // Vertically center the country code text
+    paddingHorizontal: 10, // Add padding to ensure the text is not too close to the edge
+  },
+  
+  countryCode: {
+    fontSize: 19,
+    textAlign: 'center',
+    color: '#1F1F1F', // Black text color
+    width: 40, // Width for the country code container
+  },
+  
   numberinput: {
     flex: 1,
     padding: 10,
-    paddingLeft: 40, // Add padding to prevent text from overlapping the country code
+    paddingLeft: 50, // Add padding to prevent text from overlapping the country code
     fontSize: 19,
-  },
-  countryCodeContainer: {
-    position: 'absolute',
-    left: 10,
-    top: 10,
-    backgroundColor: '#f5f5f5', // Background color to match the input
-    zIndex: 1, // Ensure it stays above the input
-  },
-  countryCode: {
-    fontSize: 19,
-    width: 30, // Fixed width to ensure consistent layout
-    textAlign: 'center', // Center the text
-    color: '#1F1F1F', // Black text color
-  },
+    height: '100%', // Ensure the input takes full height
+  },  
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
@@ -905,8 +931,9 @@ const styles = StyleSheet.create({
   },
   picker: {
     width: '100%',
-    height: 50,
+    height: 55,
     fontSize: 25,
+    overflow: 'visible', // Ensures text stays within bounds and is visible if it overflows
   },
   saveButton: {
     backgroundColor: '#28a745',
@@ -935,47 +962,51 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  GoButton: {
-    backgroundColor: '#28a745',
-    padding: 5,
-    borderRadius: 20,
-    marginTop: 5,
-    marginLeft: 5,
-    alignItems: 'center',
-    width: '40%',
-  },
+  
   buttonContainer: {
     flexDirection: 'row', // Arrange items in a row
     justifyContent: 'space-between', // Evenly space out the buttons
     alignItems: 'center', // Center items vertically
+    width: '100%', // Ensure buttons take full width of the parent container
   },
-  messageButton: {
-    backgroundColor: '#28a745',
-    padding: 5,
-    borderRadius: 20,
-    marginTop: 5,
-    marginRight: 5,
-    alignItems: 'center',
-    width: '40%',
-  },
-  messageText: {
-    color: 'white',
-    fontWeight: 'bold',
-    paddingBottom: 5,
-    marginBottom: 5,
-  },
-  saveText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginBottom: 5,
-    paddingRight: 10,
-    paddingBottom: 5,
-  },
-  icon: {
-    width: 30,  // Adjust width as needed
-    height: 30,  // Adjust height as needed
-    marginRight: 10,  
-  },
+
+    GoButton: {
+      backgroundColor: '#28a745',
+      paddingVertical: 12, // Ensure consistent height with padding
+      paddingHorizontal: 15, // Add horizontal padding to make the button's width adjustable
+      borderRadius: 20,
+      marginTop: 5,
+      alignItems: 'center',
+
+      width: '45%', // Set fixed width or auto based on content
+      height: 50, // Fixed height for consistency
+    },
+    messageButton: {
+      backgroundColor: '#28a745',
+      paddingVertical: 12, // Match the height of GoButton
+      paddingHorizontal: 15,
+      borderRadius: 20,
+      marginTop: 5,
+      marginLeft: 5, // Add a little space between the two buttons
+      alignItems: 'center',
+      width: '45%', // Set fixed width or auto based on content
+      height: 50, // Fixed height for consistency
+    },
+    icon: {
+      width: 24, // Adjust width as needed
+      height: 24, // Adjust height as needed
+    },
+    messageText: {
+      color: 'white', // Ensure text is white
+      fontSize: 16,
+      fontWeight: 'bold', // Ensure text stands out
+    },
+    saveText: {
+      color: 'white', // Ensure text is white
+      fontSize: 16,
+      fontWeight: 'bold', // Ensure text stands out
+    },  
+  
   loadingstate: {
     justifyContent: 'center',
     alignSelf: 'center',
@@ -994,9 +1025,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', // Space items out evenly
     alignItems: 'center', // Center items vertically
     padding: 10, // Add some padding for spacing
-    paddingLeft: 80,
+    paddingLeft: screenWidth * 0.03, // 10% of screen width for left padding (adjustable)
+    paddingRight: screenWidth * 0.001, // Add padding to the right side
+    width: '100%', // Ensure it takes up full width
     borderBottomWidth: 1, // Optional: Add border for separation
-    borderBottomColor: '#ccc', 
+    borderBottomColor: '#ccc',
   },
   headerText: {
     fontSize: 18,
@@ -1025,10 +1058,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalButtonContainer: {
-     // Move button to the right
     marginTop: 10,
     marginBottom: 10,
-    paddingLeft: 50,
+    paddingLeft: screenWidth * 0.1, // 10% of screen width for left padding (adjustable)
+    paddingRight: screenWidth * 0.05, // Adjust the right padding for responsiveness
+    flexDirection: 'row', // Arrange the button and other elements horizontally
+    justifyContent: 'flex-end', // Align buttons to the right
   },
   modalButton: {
     backgroundColor: '#4CAF50', // Elegant green color
@@ -1059,10 +1094,17 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 5,
     borderRadius: 10,
-    width: '90%',            // Adjust width according to your needs
-    minWidth: 331,           // Ensure it doesn't shrink too much
+    width: '100%',                // Full width of the parent container
     backgroundColor: '#ECECEC',
-    flexShrink: 0,           // Prevent shrinking
+    flexDirection: 'row',         // Row-oriented for text and image
+    alignItems: 'center',         // Vertically align items
+    justifyContent: 'space-between', // Space items evenly across the row
+  },  
+
+  textContainer: {
+    flex: 1, // This ensures the text group takes up the remaining space
+    paddingRight: 10, // Add some padding to the right side
+    // height: 100, // Ensure the text group takes up the full height
   },
   noMessageContainer: {
     flex: 1,
@@ -1071,7 +1113,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   messageRow: {
-    flexDirection: 'row', // Arrange items in a row
+    flexDirection: 'row',  // Align items horizontally for the message and time
+    alignItems: 'center',  // Align items vertically in the center
   },
   senderName: {
     fontWeight: 'bold',
@@ -1090,8 +1133,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', // Align left like a chat bubble
   },
   messageTime: {
-    padding: 5,
-    marginLeft: 15, // Add some spacing between text and time
+    fontSize: 12,
+    color: '#666', // Lighter gray for timestamp
+    paddingLeft: 10,
+  },
+  messageImage: {
+    width: 80,           // Fixed width for the image
+    height: '100%',      // Image will stretch to match the height of the container
+    marginLeft: 10,      // Space between text and image
+    alignSelf: 'stretch', // Stretch the image vertically to match the text height
   },
   noMessageText: {
     fontSize: 18,

@@ -52,7 +52,7 @@ const ReportScreen = () => {
   
       // Send report to the server (uncomment and customize as needed)
       const response = await axios.post(
-        'http://10.0.2.2:8000/api/reports',
+        'http://192.168.31.160:8000/api/reports',
         {
           messageId,
           Reporter: userId,

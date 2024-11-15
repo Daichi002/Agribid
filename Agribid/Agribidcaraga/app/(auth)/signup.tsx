@@ -103,7 +103,7 @@ interface LookupMap {
     
     try {
       // Check if the phone number already exists
-      const checkResponse = await axios.get('http://10.0.2.2:8000/api/check-phone', {
+      const checkResponse = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/check-phone', {
         params: { Phonenumber: formattedPhonenumber },
         headers: { 'Content-Type': 'application/json' },
       });
@@ -239,7 +239,7 @@ const handleAddressSelect = () => {
 };
 
   return (
-    <SafeAreaView style={{ backgroundColor: '#7DC36B', height: '100%' }}>
+    <SafeAreaView style={{ backgroundColor: '#7DC36B', height: '100%', padding: 10 }}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.logoContainer}>
           <Image source={icons.Agribid} style={styles.logo} />
@@ -435,14 +435,14 @@ const styles = StyleSheet.create({
   countryCodeContainer: {
     marginTop: 26,
     position: 'absolute',
-    left: 10,
-    top: 10,
+    left: 3,
+    top: 2,
     // backgroundColor: '#f5f5f5', // Background color to match the input
     zIndex: 1, // Ensure it stays above the input
   },
   countryCode: {
     fontSize: 16,
-    width: 30, // Fixed width to ensure consistent layout
+    width: 40, // Fixed width to ensure consistent layout
     textAlign: 'center', // Center the text
     color: '#1F1F1F', // Adjust based on your theme
   },

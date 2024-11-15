@@ -4,12 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { router} from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
-import CustomAlert from '../components/customeAlert';
 import FormField from "../components/formfield";
 import { icons } from '../constants';
+import { useAlert } from '../components/AlertContext';
 
 const ForgotPassword = () => {
   const navigation = useNavigation();
+  const { showAlert } = useAlert();
   const [step, setStep] = useState(1);
   const [form, setform] = useState({
     otp: '',
@@ -17,7 +18,6 @@ const ForgotPassword = () => {
     newPassword: '',
     Confirmpassword: ''
   });
-  const [showAlert, setShowAlert] = useState(false);
   
   const Phonenumber = form.Phonenumber.startsWith("+63")
   ? form.Phonenumber
@@ -27,17 +27,17 @@ const ForgotPassword = () => {
   const handlePhoneNumberSubmit = async () => {
     console.log(Phonenumber);
     try {
-      const response = await axios.post('http://10.0.2.2:8000/api/check-phone-exist', 
+      const response = await axios.post('http://192.168.31.160:8000/api/check-phone-exist', 
         { Phonenumber: Phonenumber });
       
       // Assuming 'message' is returned from the Laravel response
       if (response.status === 200) {
-        const response = await axios.post('http://10.0.2.2:8000/api/send-otp', {
+        const response = await axios.post('http://192.168.31.160:8000/api/send-otp', {
             to: Phonenumber,
           });
           if (response.status === 200) {
             setStep(2);
-            Alert.alert('OTP sent', 'An OTP has been sent to your phone.');
+            showAlert('Your One-Time Password (OTP) has been successfully sent!', 3000);
           } else {
             Alert.alert('Error', 'OTP error. Please try again.');
           }
@@ -54,7 +54,7 @@ const ForgotPassword = () => {
   // Verify OTP
   const handleOtpSubmit = async () => {
     try {
-      const response = await axios.post('http://10.0.2.2:8000/api/verify-otp', 
+      const response = await axios.post('http://192.168.31.160:8000/api/verify-otp', 
         { to:Phonenumber, otp: form.otp });
       if (response.status === 200) {
         setStep(3);
@@ -74,7 +74,7 @@ const ForgotPassword = () => {
       }
       console.log(form.newPassword);
     try {
-      const response = await axios.post('http://10.0.2.2:8000/api/updatepassword', 
+      const response = await axios.post('http://192.168.31.160:8000/api/updatepassword', 
         { Phonenumber, newPassword: form.newPassword });
       if (response.status === 200) {
         // Alert.alert('Success', 'Password has been updated.');
@@ -202,13 +202,6 @@ const ForgotPassword = () => {
           </TouchableOpacity>
         </View>
       )}
-       {showAlert && (
-        <CustomAlert
-          message="Password Updated Successfully!"
-          duration={3000}
-          onDismiss={() => setShowAlert(false)}
-        />
-      )}  
     </View>
     </SafeAreaView>
   );
@@ -278,13 +271,13 @@ const styles = StyleSheet.create({
   countryCodeContainer: {
     marginTop: 26,
     position: 'absolute',
-    left: 10,
-    top: 10,
+    left: 3,
+    top: 2,
     zIndex: 1, // Ensure it stays above the input
   },
   countryCode: {
     fontSize: 16,
-    width: 30, // Fixed width to ensure consistent layout
+    width: 40, // Fixed width to ensure consistent layout
     textAlign: 'center', // Center the text
     color: '#1F1F1F', // Adjust based on your theme
   },

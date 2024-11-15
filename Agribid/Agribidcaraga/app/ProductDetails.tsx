@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, Image, TextInput, FlatList, StyleSheet, TouchableOpacity,
-   Modal, KeyboardAvoidingView, Platform, Keyboard, Alert, ActivityIndicator, } from 'react-native';
+   Modal, KeyboardAvoidingView, Platform, Keyboard, Alert, ActivityIndicator,
+   Dimensions, } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -13,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
 
-
+const screenWidth = Dimensions.get('window').width;
 interface Product {
   id: string;
   user_id: string;
@@ -141,6 +142,7 @@ const ProductDetails = () => {
     }, [productId])
 );
 
+ //fetch the product
   const fetchProduct = async () => {
     if (!productId) {
       console.error('No product ID found');
@@ -153,7 +155,7 @@ const ProductDetails = () => {
         return;
       }   
       console.log('Parsed Product:', productId);
-      const response = await axios.get(`http://10.0.2.2:8000/api/productdetails/${productId}`, {
+      const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/productdetails/${productId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -171,6 +173,7 @@ const ProductDetails = () => {
   //   loading = true;
   // }
 
+  //fetch the rating of the product
   const fetchRating = async () => {
     if (!productId) {
         console.error('No product ID found');
@@ -185,7 +188,7 @@ const ProductDetails = () => {
         
         // console.log('Fetching product Rating:', productId);
 
-        const response = await axios.get(`http://10.0.2.2:8000/api/ratings/${productId}`, {
+        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/ratings/${productId}`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
@@ -270,7 +273,7 @@ const ProductDetails = () => {
 
 useEffect(() => {
   const loadImage = async () => {
-    const uri = `http://10.0.2.2:8000/storage/product/images/${product?.image}?${new Date().getTime()}`;
+    const uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/product/images/${product?.image}?${new Date().getTime()}`;
     setImageUri(await cacheImage(uri));
     setLoading(false);
   };
@@ -294,7 +297,7 @@ useEffect(() => {
           return;
         }
   
-        const response = await axios.get(`http://10.0.2.2:8000/api/comments/${id}`, {
+        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`, // Include token if needed
           },
@@ -358,24 +361,24 @@ useEffect(() => {
   };
   
   // function for message list
-  const sortMessages = (messages: Message[], currentUserId: number) => {
-    return messages.reduce((acc: { [key: string]: { first: Message; latest: Message } }, message) => {
-      const key = `${message.product_id}-${message.sender_id}-${message.receiver_id}`;
-      const reversedKey = `${message.product_id}-${message.receiver_id}-${message.sender_id}`;
+  // const sortMessages = (messages: Message[], currentUserId: number) => {
+  //   return messages.reduce((acc: { [key: string]: { first: Message; latest: Message } }, message) => {
+  //     const key = `${message.product_id}-${message.sender_id}-${message.receiver_id}`;
+  //     const reversedKey = `${message.product_id}-${message.receiver_id}-${message.sender_id}`;
   
-      if (!acc[key] && !acc[reversedKey]) {
-        acc[key] = { first: message, latest: message };
-      } else {
-        if (acc[key]) {
-          acc[key].latest = new Date(message.updated_at) > new Date(acc[key].latest.updated_at) ? message : acc[key].latest;
-        }
-        if (acc[reversedKey]) {
-          acc[reversedKey].latest = new Date(message.updated_at) > new Date(acc[reversedKey].latest.updated_at) ? message : acc[reversedKey].latest;
-        }
-      }
-      return acc;
-    }, {});
-  };
+  //     if (!acc[key] && !acc[reversedKey]) {
+  //       acc[key] = { first: message, latest: message };
+  //     } else {
+  //       if (acc[key]) {
+  //         acc[key].latest = new Date(message.updated_at) > new Date(acc[key].latest.updated_at) ? message : acc[key].latest;
+  //       }
+  //       if (acc[reversedKey]) {
+  //         acc[reversedKey].latest = new Date(message.updated_at) > new Date(acc[reversedKey].latest.updated_at) ? message : acc[reversedKey].latest;
+  //       }
+  //     }
+  //     return acc;
+  //   }, {});
+  // };
   
   const normalizeKeys = (obj: { [key: string]: any }) => {
     const normalizedObj: { [key: string]: any } = {};
@@ -414,7 +417,7 @@ useEffect(() => {
             {displayName || 'Unknown'}
           </Text>
           <View style={styles.messageRow}>
-            <Text style={styles.messageTextlist}>
+            <Text style={styles.messageTextlist} numberOfLines={1}>
               {isImageUrl((latest as any)?.text ?? '') ? 'Image' : ((latest as any)?.text || 'No message content')}
             </Text>
             <Text style={styles.messageTime}>
@@ -438,7 +441,7 @@ useEffect(() => {
           return;
         }
         
-        const response = await axios.get('http://10.0.2.2:8000/api/messageslistproduct', {
+        const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messageslistproduct', {
           params: { Id },
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -543,7 +546,7 @@ useEffect(() => {
         console.error('No auth token found');
         return;
       }
-      const response = await axios.post('http://10.0.2.2:8000/api/comments', {
+      const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/comments', {
         product_id: productId,
         userId: newComment.userId,
         text: newComment.text,
@@ -606,7 +609,7 @@ useEffect(() => {
         return;
       }
 
-      const response = await axios.post('http://10.0.2.2:8000/api/replies', {
+      const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/replies', {
       comment_id: commentId,
       user_id: userId,
       reply: reply,
@@ -667,7 +670,7 @@ useEffect(() => {
       }
       
 
-      const response = await axios.post('http://10.0.2.2:8000/api/replies_replies', {
+      const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/replies_replies', {
       comment_id: commentId,
       replies_to: replyId,
       user_id: userId,
@@ -714,7 +717,7 @@ const fetchReplies = async (commentIDs: string[]) => {
     }
 
     console.log('Fetching Replies for comments:', commentIDs);
-    const response = await axios.get(`http://10.0.2.2:8000/api/replies/${commentIDs}`, {
+    const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/replies/${commentIDs}`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -780,12 +783,13 @@ const RenderReplies = ({ item }: { item: Replies }) => {
  const targetUser = item.replies_to && item.replies_to.user ? item.replies_to.user : (item.comment && item.comment.user ? item.comment.user : null); 
  const targetUserName = targetUser ? `${targetUser.Firstname} ${targetUser.Lastname}` : 'Unknown User'; 
 //  console.log('Target User:', targetUser);
-
   return (
       <View>
           <View style={styles.replies}>
               <View style={styles.commentheader}>
-                  <View>               
+                  <View> 
+                    
+                    <TouchableOpacity onPress={() => GotoCommentUserprofile(item.user?.id)}>            
                       <Text style={styles.commentUser}> 
                         <Text style={styles.userreplyName}> 
                           {item.user?.Firstname || defaultUser.Firstname} {item.user?.Lastname || ''} 
@@ -794,6 +798,7 @@ const RenderReplies = ({ item }: { item: Replies }) => {
                          { targetUserName}
                       </Text> 
                     </Text>
+                    </TouchableOpacity> 
                       <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
                           <Text style={{ color: 'black' }}>
                               {beforeText}
@@ -927,7 +932,7 @@ const handleDelete = async (id: string | number) => {
               }
 
               // Send delete request to the server
-              const response = await axios.delete(`http://10.0.2.2:8000/api/comments/${id}`, {
+              const response = await axios.delete(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/${id}`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
 
@@ -1006,7 +1011,7 @@ const handleDeletereply = async (id: string | number) => {
                 return; 
               } 
               
-              const response = await axios.delete(`http://10.0.2.2:8000/api/reply/${id}`, 
+              const response = await axios.delete(`https://trusting-widely-goldfish.ngrok-free.app/api/reply/${id}`, 
                 { 
                   headers: 
                   { 
@@ -1153,6 +1158,13 @@ const GotoUserprofile = () => {
   }
 };
 
+const GotoCommentUserprofile = (id: any) => {
+  if (id) {
+    console.log('Navigating to user profile:', id);
+    navigation.navigate('userproduct', { userId: id });
+  }
+};
+
 const renderHeader = () => (
   <View>
    <View style={styles.header}>    
@@ -1244,17 +1256,17 @@ const renderHeader = () => (
           <Text>Price: {product?.price}</Text>
           <Text>Location: {product?.locate}</Text>
         </View>   
-      <View style={styles.messagebar}>
-        <TouchableOpacity style={styles.message} onPress={handlePress}>
-          <Text style={styles.messageText}>Message</Text>
-        </TouchableOpacity>
-        {product?.user_id?.toString() === currentUserId?.toString() && (
-          <Text style={styles.totalMessage}>
-            <Image source={icons.contact} style={styles.icon} resizeMode="contain" />
-            messages: {totalmessage}
-          </Text>
-        )}
-      </View>
+        <View style={styles.messagebar}>
+          <TouchableOpacity style={styles.message} onPress={handlePress}>
+            <Text style={styles.messageText}>Message</Text>
+          </TouchableOpacity>
+          {product?.user_id?.toString() === currentUserId?.toString() && (
+            <View style={styles.totalMessageContainer}>
+              <Image source={icons.contact} style={styles.icon} resizeMode="contain" />
+              <Text style={styles.totalMessage}>messages: {totalmessage}</Text>
+            </View>
+          )}
+        </View>
     </View>
   </View>
 );
@@ -1297,8 +1309,9 @@ return (
               <View style={styles.comment}>
                 <View style={styles.commentheader}>
                   <View>
-                    {/* fix this in where the product/ should be pick to be send to handlink and fix how many charater arre turned blue maybe add more specifies to completely exlude it from normal text */}
+                   <TouchableOpacity onPress={() => GotoCommentUserprofile(item.user.id)}>
                     <Text style={styles.commentUser}>{item.user?.Firstname || defaultUser.Firstname} {item.user?.Lastname}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
                       <Text style={{ color: 'black' }}>
                         {beforeText}
@@ -1508,17 +1521,20 @@ stars: {
     tintColor: '#000', // Change color if needed
   },
   product: {
-    padding: 5,                     // Increase padding for a more spacious look
-    borderWidth: 1,                  // Add a border to outline the comment box
-    borderColor: '#ddd',             // Use a subtle, light gray for the border
-    borderRadius: 10,                // Rounded corners to make it look modern
-    backgroundColor: '#f9f9f9',      // Light background color for a soft look
-    shadowColor: "#000",             // Add a slight shadow for depth
-    shadowOffset: { width: 0, height: 1 }, 
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    backgroundColor: '#f9f9f9',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 1, 
+    elevation: 1,
     marginBottom: 5,
+    width: '100%', // Set width as percentage to adapt to screen width
+    maxWidth: 350, // Optional max width for larger screens
+    alignSelf: 'center', // Center align on screen
   },
 
   dash: {
@@ -1642,20 +1658,30 @@ stars: {
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    width: 380,
-    backgroundColor: '#F0F5F0', // Lighter green background
+    width: '100%',               // Full width of its parent
+    backgroundColor: '#F0F5F0',
     paddingVertical: 5,
     borderRadius: 15,
   },
   message: {
-    backgroundColor: '#28a745', // Darker green for a more modern look
+    backgroundColor: '#28a745',  // Darker green for a modern look
     borderRadius: 20,
     paddingVertical: 10,
     paddingHorizontal: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
-    marginRight: 15,
+    flex: 1,                     // Takes up remaining space
+    marginRight: 10,             // Reduced margin for balanced spacing
+  },
+  totalMessageContainer: {
+    flexDirection: 'row',        // Arrange icon and text in a row
+    alignItems: 'center',
+    justifyContent: 'flex-end',  // Align to the right if `message` is present
+  },
+  totalMessage: {
+    fontSize: 16,                // Adjusted size for readability
+    color: '#333',               // Darker text color for contrast
+    marginLeft: 5,               // Spacing between icon and text
   },
   messageText: {
     color: '#FFFFFF', // White text for contrast
@@ -1672,13 +1698,6 @@ stars: {
     maxWidth: '80%', // Limit message width
     alignSelf: 'flex-start', // Align left like a chat bubble
   },
-  totalMessage: {
-    fontSize: 20,
-    color: '#333', // Darker text color for contrast
-    alignSelf: 'flex-end',
-    paddingLeft: 60,
-    paddingBottom: 10,
-  },
   commentsContainer: {
     maxHeight: 380, // Set a max height for the comments section
     marginVertical: 10,
@@ -1688,18 +1707,23 @@ stars: {
     overflow: 'hidden', // Ensures no overflow
   },
   comment: {
-    padding: 5, 
-    height: 60,                    // Increase padding for a more spacious look
-    borderWidth: 1,                  // Add a border to outline the comment box
-    borderColor: '#ddd',             // Use a subtle, light gray for the border
-    borderRadius: 10,                // Rounded corners to make it look modern
-    backgroundColor: '#f9f9f9',      // Light background color for a soft look
-    shadowColor: "#000",             // Add a slight shadow for depth
-    shadowOffset: { width: 0, height: 1 }, 
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    backgroundColor: '#f9f9f9',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 1,                // Elevation for Android shadow
-  },  
+    elevation: 1,
+    width: screenWidth * 0.95, // 95% of screen width for responsiveness
+    alignSelf: 'center',
+    marginVertical: 5,
+    flexDirection: 'row', // Make sure the comment layout is in a row
+    justifyContent: 'space-between', // Ensure space between comment and the icon
+    alignItems: 'center', // Align items in the center vertically
+  },
   
   commentUser: {
     fontSize: 14,                  // Slightly larger font size for better visibility
@@ -1709,18 +1733,22 @@ stars: {
   },
 
   replies: {
-    padding: 5, 
-    height: 60,                    // Increase padding for a more spacious look
-    width: 370,
-    borderWidth: 1,                  // Add a border to outline the comment box
-    borderColor: '#ddd',             // Use a subtle, light gray for the border
-    borderRadius: 10,                // Rounded corners to make it look modern
-    backgroundColor: '#f9f9f9',      // Light background color for a soft look
-    shadowColor: "#000",             // Add a slight shadow for depth
-    shadowOffset: { width: 0, height: 1 }, 
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    backgroundColor: '#f9f9f9',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 1,                // Elevation for Android shadow
+    elevation: 1,
+    width: screenWidth * 0.9, // 95% of screen width for responsiveness
+    alignSelf: 'center',
+    marginVertical: 5,
+    flexDirection: 'row', // Make sure the comment layout is in a row
+    justifyContent: 'space-between', // Ensure space between comment and the icon
+    alignItems: 'center', // Align items in the center vertically
   },
   targetUser: {
     fontWeight: 'bold',
@@ -1822,12 +1850,18 @@ stars: {
     fontWeight: 'bold', // Bold font for emphasis
   },
 
-  delete: { 
-     right:5,
+  delete: {   
+      position: 'absolute',  // Position the icon absolutely within the comment container
+      right: 23,             // Set right margin to give some space from the right edge
+      top: '50%',            // Center vertically within the comment container
+      transform: [{ translateY: -12 }], // Offset by half the icon height to perfectly center it
   },
   replydelete: { 
-    right:15,
- },
+     position: 'absolute',  // Position the icon absolutely within the comment container
+      right: 27,             // Set right margin to give some space from the right edge
+      top: '50%',            // Center vertically within the comment container
+      transform: [{ translateY: -12 }], // Offset by half the icon height to perfectly center it
+  },
   icon: {
     width: 24, // Adjust based on your icon size
     height: 24, // Adjust based on your icon size
@@ -1874,7 +1908,10 @@ stars: {
   modalButtonContainer: {
     marginTop: 10,
     marginBottom: 10,
-    paddingLeft: 50,
+    paddingLeft: screenWidth * 0.1, // 10% of screen width for left padding (adjustable)
+    paddingRight: screenWidth * 0.05, // Adjust the right padding for responsiveness
+    flexDirection: 'row', // Arrange the button and other elements horizontally
+    justifyContent: 'flex-end', // Align buttons to the right
   },
   modalButton: {
     backgroundColor: '#4CAF50', // Elegant green color
@@ -1912,13 +1949,19 @@ stars: {
     justifyContent: 'space-between', // Space items out evenly
     alignItems: 'center', // Center items vertically
     padding: 10, // Add some padding for spacing
-    paddingLeft: 80,
+    paddingLeft: screenWidth * 0.03, // 10% of screen width for left padding (adjustable)
+    paddingRight: screenWidth * 0.001, // Add padding to the right side
+    width: '100%', // Ensure it takes up full width
     borderBottomWidth: 1, // Optional: Add border for separation
     borderBottomColor: '#ccc', 
   },
   headerText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 18, // Adjust font size as needed
+    fontWeight: 'bold', 
+    flex: 1, // Make sure it takes the available space in the row
+    textAlign: 'left', // Align text to the left
+    color: '#333',
+    flexWrap: 'wrap', // Ensure text wraps within the space
   },
   nomessage: {
     textAlign: 'center',
@@ -1932,13 +1975,12 @@ stars: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   messageContainer: {
     padding: 10,
     marginVertical: 5,
     borderRadius: 20,
-    width: '90%',            // Adjust width according to your needs
-    minWidth: 331,           // Ensure it doesn't shrink too much
+    width: screenWidth * 0.75, 
+    minWidth: 200,           // Ensure it doesn't shrink too much
     backgroundColor: '#ECECEC',
     flexShrink: 0,           // Prevent shrinking
   },

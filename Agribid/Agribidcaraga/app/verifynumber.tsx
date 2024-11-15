@@ -42,13 +42,13 @@ const verifynumer = () => {
         const sendOtp = async (Phoenenumber : any) => {
           
           try {
-            const response = await axios.post('http://10.0.2.2:8000/api/send-otp', {
+            const response = await axios.post('http://192.168.31.160:8000/api/send-otp', {
               to: Phonenumber,
             });
             console.log(response.data);
 
             if (response.status === 200) {
-              showAlert('Success", "OTP sent successfully!', 3000);
+              showAlert('Success, OTP sent successfully!', 3000);
               setIsResendDisabled(true);
               setCountdown(60); // Reset countdown to 60 seconds
             }
@@ -79,7 +79,7 @@ const verifynumer = () => {
               console.log('Verifying OTP:', otp, Phonenumber);
       
               // Verify the OTP
-              const verifyResponse = await axios.post('http://10.0.2.2:8000/api/verify-otp', {
+              const verifyResponse = await axios.post('http://192.168.31.160:8000/api/verify-otp', {
                   otp: Number(otp),
                   to: Phonenumber,
               });
@@ -103,7 +103,7 @@ const verifynumer = () => {
               console.log('Sending registration request with data:', registrationData);
       
               // Register the user
-              const registerResponse = await axios.post('http://10.0.2.2:8000/api/register', registrationData, {
+              const registerResponse = await axios.post('http://192.168.31.160:8000/api/register', registrationData, {
                   headers: {
                       'Content-Type': 'application/json',
                   },
@@ -127,7 +127,7 @@ const verifynumer = () => {
       
       const handleUserLogin = async () => {
           try {
-              const response = await axios.post('http://10.0.2.2:8000/api/login', {
+              const response = await axios.post('http://192.168.31.160:8000/api/login', {
                   Phonenumber: Phonenumber,
                   password: password,
               }, {

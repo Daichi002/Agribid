@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
@@ -8,6 +8,7 @@ import { useNavigation } from "@react-navigation/native";
 import axios from 'axios';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const { height } = Dimensions.get('window'); // Get the screen height
 interface Product {
   id: string;
   user_id: string;
@@ -65,7 +66,7 @@ const RenderNotifications = ({ item, ViewNotification }: { item: notification, V
   // console.log('Rendering notification:', item);
   useEffect(() => { 
     const loadImage = async () => { 
-      const uri = `http://10.0.2.2:8000/storage/product/images/${item.product.image}`; 
+      const uri = `http://192.168.31.160:8000/storage/product/images/${item.product.image}`; 
       if (imageCache[uri]) { setImageUri(imageCache[uri]); 
         return; 
       } 
@@ -122,7 +123,7 @@ const RenderNotifications = ({ item, ViewNotification }: { item: notification, V
       }
 
       const response = await axios.post(
-        `http://10.0.2.2:8000/api/notifications/${id}/mark-read`,
+        `http://192.168.31.160:8000/api/notifications/${id}/mark-read`,
         {}, // Empty object for data since this is a POST without a body
         {
           headers: {
@@ -181,7 +182,7 @@ const RenderNotifications = ({ item, ViewNotification }: { item: notification, V
         // Load the product image
         useEffect(() => {
           const loadImage = async () => {
-            const uri = `http://10.0.2.2:8000/storage/product/images/${item.product.image}`;
+            const uri = `http://192.168.31.160:8000/storage/product/images/${item.product.image}`;
             if (imageCache[uri]) {
               setImageUri(imageCache[uri]);
               return;
@@ -241,7 +242,7 @@ const RenderNotifications = ({ item, ViewNotification }: { item: notification, V
             const repliesId = item.replies[0]?.id; // Access the ID of the reply
       
             const response = await axios.post(
-              `http://10.0.2.2:8000/api/reply/notifications/${repliesId}/mark-read`,
+              `http://192.168.31.160:8000/api/reply/notifications/${repliesId}/mark-read`,
               {},
               {
                 headers: {
@@ -312,7 +313,7 @@ const Notif = () => {
           }
   
           // Step 1: Fetch user products
-          const productsResponse = await axios.get(`http://10.0.2.2:8000/api/notif/products`, {
+          const productsResponse = await axios.get(`http://192.168.31.160:8000/api/notif/products`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -328,7 +329,7 @@ const Notif = () => {
           // console.log('Fetching Prods comments:', productIDs);
           // Step 2: Fetch comments for each product
           const lastFetched = await AsyncStorage.getItem('lastFetched');
-          const commentsResponse = await axios.get(`http://10.0.2.2:8000/api/comments`, {
+          const commentsResponse = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments`, {
             params: {
               productIds: productIDs.join(','),
               lastFetched: lastFetched || ''
@@ -466,7 +467,7 @@ const fetchUserCommentsWithReplies = async () => {
     // console.log('Fetched comment using user ID:', userId);
 
     // Step 1: Fetch user comments
-    const commentsResponse = await axios.get(`http://10.0.2.2:8000/api/comments/user/${userId}`, {
+    const commentsResponse = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/user/${userId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -480,7 +481,7 @@ const fetchUserCommentsWithReplies = async () => {
     // Step 2: Fetch replies in bulk using the comment IDs
     const fetchRepliesForComments = async (commentIDs) => {
       try {
-        const response = await axios.get(`http://10.0.2.2:8000/api/comments/replies`, {
+        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/replies`, {
           params: {
             commentIds: commentIDs.join(','), // Join IDs into a single string
           },
@@ -617,6 +618,7 @@ const sortedCombinedNotifications = combinedNotifications.sort((a, b) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.inventory}>
       <Text style={styles.header}>Notifications</Text>
       <View >
       {(Array.isArray(notifications) && notifications.length > 0) || 
@@ -643,6 +645,7 @@ const sortedCombinedNotifications = combinedNotifications.sort((a, b) => {
         </View>
       )}
     </View>
+    </View>
     </SafeAreaView>
   );
 };
@@ -651,7 +654,8 @@ export default Notif;
 
 const styles = StyleSheet.create({
   container: { 
-    padding: 10, 
+    flex: 1,
+    padding: 2, 
     backgroundColor: "#f0f0f0",
   },
   header: { 
@@ -674,7 +678,7 @@ const styles = StyleSheet.create({
     fontSize: 14 
   },
   inventory: {
-    paddingBottom: 80,
+    paddingBottom: height * 0.1, // Adjust 5% of the screen height for padding
   },
   notificationContainer: {
     flexDirection: 'row',
