@@ -4,6 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAlert } from '../../components/AlertContext';
+import BASE_URL from '../../components/ApiConfig';
 import axios from 'axios';
 
 const ReportScreen = () => {
@@ -52,7 +53,7 @@ const ReportScreen = () => {
   
       // Send report to the server (uncomment and customize as needed)
       const response = await axios.post(
-        'http://192.168.31.160:8000/api/reports',
+        `${BASE_URL}/api/reports`,
         {
           productId,
           Reporter: userId,
@@ -68,7 +69,7 @@ const ReportScreen = () => {
       );
 
       if (response.status === 200) {
-        showAlert('Report Submited!', 3000);
+        showAlert('Report Submited!', 3000, 'green');
         console.log("Report submitted successfully");
         navigation.goBack();
       } else {

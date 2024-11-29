@@ -1,651 +1,268 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Dimensions } from 'react-native';
+import React, { useEffect, useMemo, useState} from 'react';
+import { View, Text, StyleSheet, Dimensions, RefreshControl, FlatList } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system';
-import { useNavigation } from "@react-navigation/native";
+import NotificationItem from '../../components/notificaitonrender'; 
+import BASE_URL from '../../components/ApiConfig';
+ 
 
 import axios from 'axios';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from 'expo-router';
+import Toast from 'react-native-simple-toast';
 
-const { height } = Dimensions.get('window'); // Get the screen height
-interface Product {
-  id: string;
-  user_id: string;
-  title: string;
-  image: string;
+const { height } = Dimensions.get('window'); // Get the screen height  
+
+
+interface Notification {
+  id: number;
+  productTitle: string;
   created_at: string;
-}
-interface User {
-  id: string;
-  Firstname: string;
-  Lastname: string;
-}
-interface notification {
-  id: string;
-  product_id: string;
-  product: Product;
-  text: string;
-  created_at: string;
-  user: User;
-  userId: string;
-  isRead: boolean;
-}
-
-interface repliesnotification {
-  id: string;
-  product_id: string;
-  product: Product;
-  created_at: string;
-  user: User;
-  userId: string;
-  replies: replies[]; 
-}
-
-interface replies {
-  id: string;
-  comment_id: string;
-  created_at: string;
-  user: User;
-  userId: string;
-  isRead: boolean;
-}
-
-
-type CombinedNotification = notification | repliesnotification;
-
-const ProductImage = React.memo(({ imageUri }: { imageUri: string }) => {
-  return <Image source={{ uri: imageUri }} style={styles.productImage} />;
-});
-
-const RenderNotifications = ({ item, ViewNotification }: { item: notification, ViewNotification: (product: Product) => void }) => { 
-  const [imageUri, setImageUri] = useState<string | null>(null); 
-  // console.log('Rendering IsRead:', item.isRead);
-  const [isRead, setIsRead] = useState(item?.isRead); // Set initial read status
-  const imageCache: { [key: string]: string } = {}; // In-memory cache for image URIs 
-  // console.log('Rendering notification:', item);
-  useEffect(() => { 
-    const loadImage = async () => { 
-      const uri = `http://192.168.31.160:8000/storage/product/images/${item.product.image}`; 
-      if (imageCache[uri]) { setImageUri(imageCache[uri]); 
-        return; 
-      } 
-      const filename = uri.split('/').pop(); 
-      const fileUri = `${FileSystem.documentDirectory}${filename}`; 
-      const info = await FileSystem.getInfoAsync(fileUri); 
-      if (info.exists) 
-        { imageCache[uri] = fileUri; setImageUri(fileUri); 
-
-        } else 
-        { const response = await FileSystem.downloadAsync(uri, fileUri); 
-          imageCache[uri] = response.uri; 
-          
-          setImageUri(response.uri); } }; 
-          
-          loadImage(); 
-        }, [item.product.image]); 
-
-        // counts the time since the comment was created
-  const timeSince = (dateString: string): string => {
-    if (!dateString) {
-      return 'No date available';
-    }
-  
-    const date = new Date(dateString);
-    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-    let interval = Math.floor(seconds / 31536000);
-  
-    if (interval >= 1) return `${interval} y${interval === 1 ? '' : ''}`;
-    interval = Math.floor(seconds / 2592000);
-    if (interval >= 1) return `${interval} m${interval === 1 ? '' : ''}`;
-    interval = Math.floor(seconds / 86400);
-    if (interval >= 1) return `${interval} d${interval === 1 ? '' : ''}`;
-    interval = Math.floor(seconds / 3600);
-    if (interval >= 1) return `${interval} h${interval === 1 ? '' : ''}`;
-    interval = Math.floor(seconds / 60);
-    if (interval >= 1) return `${interval} m${interval === 1 ? '' : ''}`;
-    return `${seconds} s${seconds === 1 ? '' : ''}`;
+  user: {
+    Firstname: string;
+    Lastname: string;
   };
+  from: {
+    id: number;
+    title: string;
+    image: string;
+  };
+  type: string;
+  isRead: number;
+}
 
-  const notificationBackgroundColor = isRead ? '#ffffff' : '#e6f7ff';
+const Notif = () => {
+  const navigation = useNavigation();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+ 
 
-  const handleNotificationClick = async () => {
-    setIsRead(true);
-    ViewNotification(item.product);
-    // console.log('Notification clicked:', item.id);
-    const id = item.id;
-  // Send request to mark notification as read
-  try {
-    const token = await AsyncStorage.getItem('authToken');
+
+  useEffect(() => { 
+    storedNotifications();
+  }, []); // Empty dependency array ensures this effect runs only once
+
+
+    // Refresh function for pull-to-refresh
+    const onRefresh = async () => {
+      try {
+        setIsRefreshing(true);
+        setLoading(true);
+        await fetchNotifications();
+        Toast.show('Notifications updated', Toast.SHORT); // Optional Toast message
+      } catch (error) {
+        console.error('Error refreshing notifications:', error);
+        Toast.show('Error updating notifications', Toast.LONG);
+      } finally {
+        setIsRefreshing(false);
+        setLoading(false);
+      }
+    };
+    
+
+  // Focus effect to fetch notifications periodically
+  useFocusEffect(
+    React.useCallback(() => {
+      const interval = setInterval(fetchNotifications, 60000); // Fetch every 5 minutes (300000 ms)
+
+      // Fetch notifications when the screen is focused for the first time
+      fetchNotifications();
+
+      // Cleanup the interval when the screen is unfocused
+      return () => clearInterval(interval);
+    }, []) // Empty dependency array to fetch notifications only once when the screen is focused
+  );
+
+  const fetchNotifications = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
       if (!token) {
         console.error('No auth token found');
         return;
       }
+  
+      setLoading(true);
+  
+      // Fetch notifications from the API
+      const notificationResponse = await axios.get(`${BASE_URL}/api/notif`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+  
+      const notifications = notificationResponse.data.notifications || [];
+  
+      // Sort notifications by created_at in descending order (latest first)
+      const sortedNotifications = notifications.length > 0
+        ? notifications.sort((a: { created_at: string | number | Date; }, b: { created_at: string | number | Date; }) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        : [];
+  
+      // Retrieve stored notifications
+      const storedNotificationsJSON = await AsyncStorage.getItem('notifications');
+      const storedNotifications = storedNotificationsJSON ? JSON.parse(storedNotificationsJSON) : [];
+  
+      // Check for new or missing notifications
+      const newNotificationIds = new Set(sortedNotifications.map((notif: { id: any; }) => notif.id));
+      const storedNotificationIds = new Set(storedNotifications.map((notif: { id: any; }) => notif.id));
+  
+      let isNewDataDifferent = false;
+  
+      // Check if any notification is missing in the newly fetched data
+      for (const id of storedNotificationIds) {
+        if (!newNotificationIds.has(id)) {
+          isNewDataDifferent = true;
+          break;
+        }
+      }
+  
+      // Check if the lengths differ or there are field differences
+      if (!isNewDataDifferent) {
+        isNewDataDifferent = storedNotifications.length !== sortedNotifications.length;
+      }
+  
+      if (!isNewDataDifferent) {
+        for (let i = 0; i < sortedNotifications.length; i++) {
+          const newNotif = sortedNotifications[i];
+          const storedNotif = storedNotifications.find((notif: { id: any; }) => notif.id === newNotif.id);
+  
+          if (
+            !storedNotif ||
+            newNotif.productTitle !== storedNotif.productTitle ||
+            newNotif.created_at !== storedNotif.created_at ||
+            newNotif.user.Firstname !== storedNotif.user.Firstname ||
+            newNotif.user.Lastname !== storedNotif.user.Lastname ||
+            newNotif.from?.id !== storedNotif.from?.id ||
+            newNotif.from?.title !== storedNotif.from?.title ||
+            newNotif.from?.image !== storedNotif.from?.image ||
+            newNotif.type !== storedNotif.type ||
+            newNotif.isRead !== storedNotif.isRead
+          ) {
+            isNewDataDifferent = true;
+            break;
+          }
+        }
+      }
+  
+      // Update AsyncStorage if the new data is different
+      if (isNewDataDifferent) {
+        await AsyncStorage.setItem('notifications', JSON.stringify(sortedNotifications));
+        console.log('Notifications updated in AsyncStorage');
+      } else {
+        console.log('No new data, AsyncStorage is up to date');
+      }
+  
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      setLoading(false);
+    }
+  };
+  
+  
+  
+  
 
+
+  const storedNotifications = async () => {
+    try {
+      // Get stored notifications from AsyncStorage
+      const storedNotifications = await AsyncStorage.getItem('notifications');
+      const existingNotifications = storedNotifications ? JSON.parse(storedNotifications) : [];
+  
+      if (existingNotifications.length === 0) {
+        console.log('No stored notifications found');
+        return;
+      }
+
+      console.log('Stored notifications:', existingNotifications);
+  
+      // Set notifications to state
+      setNotifications(existingNotifications);
+  
+    } catch (error) {
+      console.error('Error fetching stored notifications:', error);
+    }
+  };
+  
+
+
+  if (loading) {
+    return (
+      <View style={styles.placeholderContainer}>
+        <View style={styles.placeholderItem}>
+          <View style={styles.placeholderImage} />
+          <View style={styles.placeholderText} />
+        </View>
+        <View style={styles.placeholderItem}>
+          <View style={styles.placeholderImage} />
+          <View style={styles.placeholderText} />
+        </View>
+      </View>
+    );
+  }
+
+
+  const handleNotificationPress = async (notification: Notification) => {
+    try {
+      console.log('Notification pressed:', notification);
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) {
+        console.error("Token not found");
+        navigation.navigate("(auth)/login"); // Navigate to login if token is not found
+        return;
+      }
+  
+      // Mark the notification as read on the server
       const response = await axios.post(
-        `http://192.168.31.160:8000/api/notifications/${id}/mark-read`,
-        {}, // Empty object for data since this is a POST without a body
+        `${BASE_URL}/api/notifications/${notification.id}/mark-read`,
+        {},
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        });
-
-    const data = await response.data;
-    if (!data.success) {
-      console.error('Failed to mark as read:', data.message);
-    }
-  } catch (error) {
-    console.error('Error marking as read:', error);
-  }
-  };
-        
-        return (
-          <TouchableOpacity 
-          onPress={handleNotificationClick}
-          style={[styles.notificationContainer, { backgroundColor: notificationBackgroundColor }]}
-        >
-            <View style={styles.imageWrapper}>
-              {imageUri ? (
-                <Image source={{ uri: imageUri }} style={styles.productImage} />
-              ) : (
-                <ActivityIndicator size="small" color="#0000ff" />
-              )}
-            </View>
-            
-            <View style={styles.notificationTextContainer}>
-              <View >
-                {/* style={styles.notificationTextRow} */}
-                <Text style={styles.notificationUserName}>
-                  {item.user.Firstname} {item.user.Lastname}
-                </Text>
-                <Text> commented on </Text>
-                <Text style={styles.notificationProductTitle}>
-                  "{item.product.title}"
-                </Text>
-              </View>
-              <Text style={styles.notificationDate}>
-              {timeSince(item.created_at)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        );         
-      };
-
-      
-      const RenderreplyNotifications = ({ item, ViewNotification }) => {
-        // console.log('Latest Reply:', JSON.stringify(item, null, 2));
-        const [imageUri, setImageUri] = useState<string | null>(null);
-        const [isRead, setIsRead] = useState(item.replies[0]?.isRead); // Access isRead from the first reply
-        const imageCache: { [key: string]: string } = {}; // In-memory cache for image URIs
-      
-        // Load the product image
-        useEffect(() => {
-          const loadImage = async () => {
-            const uri = `http://192.168.31.160:8000/storage/product/images/${item.product.image}`;
-            if (imageCache[uri]) {
-              setImageUri(imageCache[uri]);
-              return;
-            }
-            const filename = uri.split('/').pop();
-            const fileUri = `${FileSystem.documentDirectory}${filename}`;
-            const info = await FileSystem.getInfoAsync(fileUri);
-            if (info.exists) {
-              imageCache[uri] = fileUri;
-              setImageUri(fileUri);
-            } else {
-              const response = await FileSystem.downloadAsync(uri, fileUri);
-              imageCache[uri] = response.uri;
-              imageCache[uri] = response.uri; // Caching the image
-            }
-          };
-          loadImage();
-        }, [item.product.image]);
-      
-        // Calculate time since creation
-        const timeSince = (dateString: string): string => {
-          if (!dateString) return 'No date available';
-      
-          const date = new Date(dateString);
-          const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-          let interval = Math.floor(seconds / 31536000);
-      
-          if (interval >= 1) return `${interval} y`;
-          interval = Math.floor(seconds / 2592000);
-          if (interval >= 1) return `${interval} m`;
-          interval = Math.floor(seconds / 86400);
-          if (interval >= 1) return `${interval} d`;
-          interval = Math.floor(seconds / 3600);
-          if (interval >= 1) return `${interval} h`;
-          interval = Math.floor(seconds / 60);
-          if (interval >= 1) return `${interval} m`;
-          return `${seconds} s`;
-        };
-      
-        
-      
-        const notificationBackgroundColor = isRead ? '#ffffff' : '#e6f7ff';
-      
-        const handleNotificationClick = async () => {
-          console.log('Notification clicked:', item.product);
-          setIsRead(true); // Update the local state to mark as read
-          ViewNotification(item.product); // Assuming this function handles navigation or view updates
-          console.log('Reply ID:', item.replies.id); // Correctly access the reply ID
-      
-          try {
-            const token = await AsyncStorage.getItem('authToken');
-            if (!token) {
-              console.error('No auth token found');
-              return;
-            }
-      
-            const repliesId = item.replies[0]?.id; // Access the ID of the reply
-      
-            const response = await axios.post(
-              `http://192.168.31.160:8000/api/reply/notifications/${repliesId}/mark-read`,
-              {},
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-      
-            const data = response.data;
-            if (!data.success) {
-              console.error('Failed to mark as read:', data.message);
-            }
-          } catch (error) {
-            console.error('Error marking as read:', error);
-          }
-        };
-      
-        return (
-          <TouchableOpacity
-            onPress={handleNotificationClick}
-            style={[styles.notificationContainer, { backgroundColor: notificationBackgroundColor }]}
-          >
-            <View style={styles.imageWrapper}>
-              {imageUri ? (
-                <Image source={{ uri: imageUri }} style={styles.productImage} />
-              ) : (
-                <ActivityIndicator size="small" color="#0000ff" />
-              )}
-            </View>
-      
-            <View style={styles.notificationTextContainer}>
-            <View>
-              <Text style={styles.notificationUserName}>
-                {item.replies[0]?.user?.Firstname} {item.replies[0]?.user?.Lastname}
-              </Text>
-              <Text> replied to your comment on </Text>
-              <Text style={styles.notificationProductTitle}>
-                "{item.product.title}"
-              </Text>
-            </View>
-            <Text style={styles.notificationDate}>
-              {timeSince(item.replies[0]?.created_at)}
-            </Text>
-          </View>
-          </TouchableOpacity>
-        );
-      };      
-
-
-const Notif = () => {
-  const [notifications, setNotifications] = useState<notification[]>([]);
-  const [repliesnotifications, setRepliesNotifications] = useState<repliesnotification[]>([]);
-  const navigation = useNavigation();
-
-  const ViewNotification = (product: any) => {
-    console.log('Viewing product details:', product.id);
-    navigation.navigate('ProductDetails', { productId: product.id });
-  };  
-
-  useFocusEffect(
-    React.useCallback(() => {
-      const fetchNotifications = async () => {
-        try {
-          const token = await AsyncStorage.getItem('authToken');
-          if (!token) {
-            console.error('No auth token found');
-            return;
-          }
-  
-          // Step 1: Fetch user products
-          const productsResponse = await axios.get(`http://192.168.31.160:8000/api/notif/products`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-          
-          const products = productsResponse.data;
-          if (products.length === 0) {
-            console.log('No products found for the current user');
-            return;
-          }
-  
-            const productIDs: number[] = products.map((product: Product) => product.id);
-          // console.log('Fetching Prods comments:', productIDs);
-          // Step 2: Fetch comments for each product
-          const lastFetched = await AsyncStorage.getItem('lastFetched');
-          const commentsResponse = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments`, {
-            params: {
-              productIds: productIDs.join(','),
-              lastFetched: lastFetched || ''
-            },
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-          
-          Object.entries(commentsResponse.data).forEach( async ([id, replies]) => {
-            // console.log(`Comment ID: ${id}`, replies);          
-          });
-          
-      
-          // Assuming commentsResponse.data is an array of comments
-          const commentsData = commentsResponse.data;
-
-          // Filter comments to exclude those where product.user_id equals comment.userId
-          const filteredCommentsData = commentsData.filter((comment: notification) => {
-            return comment.product.user_id !== comment.userId;
-          });
-
-          
-          // Now set the filtered notifications
-          // console.log('raw notif data', filteredCommentsData);a
-          await updateNotifications(filteredCommentsData);
-          // setNotifications(filteredCommentsData);
-
-        } catch (error) {
-          console.error('Error fetching notifications:', error);
         }
-      };
+      );
   
-      fetchNotifications(); 
-    }, []) // Empty dependency array to fetch only once when the screen is focused
-  );
-
-  const updateNotifications = async (filteredCommentsData) => {
-    try {
-        // Ensure filteredCommentsData is a valid array
-        if (!Array.isArray(filteredCommentsData)) {
-            console.error('filteredCommentsData is not an array:', filteredCommentsData);
-            return;
-        }
-  
-        // Retrieve existing notifications from AsyncStorage and parse them
-        const storedNotifications = await AsyncStorage.getItem('notifications');
-        const existingNotifications = storedNotifications ? JSON.parse(storedNotifications) : [];
-  
-        // Ensure existingNotifications is an array
-        if (!Array.isArray(existingNotifications)) {
-            console.error('Existing notifications data is not an array:', existingNotifications);
-            return;
-        }
-  
-        // Filter out notifications that are no longer in `filteredCommentsData`
-        const filteredNotifications = existingNotifications.filter(notification =>
-            filteredCommentsData.some(newNotification => newNotification.id === notification.id)
-        );
-  
-        // Remove duplicates by creating a new array with unique `id` values
-        const combinedNotifications = [
-            ...filteredNotifications,
-            ...filteredCommentsData
-        ];
-
-        const updatedNotifications = combinedNotifications.reduce((acc, current) => {
-            const isDuplicate = acc.find(item => item.id === current.id);
-            if (!isDuplicate) {
-                acc.push(current);
-            } else {
-                // Update `isRead` if it has changed
-                if (isDuplicate.isRead !== current.isRead) {
-                    acc = acc.map(item =>
-                        item.id === current.id ? { ...item, isRead: current.isRead } : item
-                    );
-                }
-            }
-            return acc;
-        }, []);
-  
-        // Save the updated notifications list to AsyncStorage
-        await AsyncStorage.setItem('notifications', JSON.stringify(updatedNotifications));
-
-        // console.log('isread',updatedNotifications)
-  
-        // Update state with the updated notifications list
-        setNotifications(updatedNotifications);
+      if (response.status === 200) {
+        // Update the notification status to 'read' in the local state
+        notification.isRead = 1; // Directly mutating the notification object
+  console.log('Notification marked as read:', notification);
+        const productId = notification.from.id;
+        // Navigate to the ProductDetails screen with the product ID
+        navigation.navigate("ProductDetails", { productId: productId.toString() });
+      } else {
+        // Handle any errors or issues with the response
+        console.error("Failed to mark notification as read:", response);
+      }
     } catch (error) {
-        console.error('Error updating notifications:', error);
+      console.error("Error occurred:", error);
     }
-};
+  };
 
 
-  
-// add another function that will fetch replies of comments for the user
-useFocusEffect(
-  useCallback(() => {
-    let isMounted = true; // Track if the component is mounted
-
-    const fetchData = async () => {
-      const data = await fetchUserCommentsWithReplies();
-      if (isMounted && data) {
-        // Only update state if the component is still mounted
-        setRepliesNotifications(data);
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      isMounted = false; // Clean up function to set isMounted to false
-    };
-  }, []) // Empty dependency array ensures this runs on focus
-);
-
-// fix not fetching comment with replies using user ID
-const fetchUserCommentsWithReplies = async () => {
-  try {
-    const token = await AsyncStorage.getItem('authToken');
-    if (!token) {
-      console.error('No auth token found');
-      return;
-    }
-
-    // Retrieve user info from AsyncStorage
-    const userInfoString = await AsyncStorage.getItem('userInfo');
-    if (!userInfoString) {
-      throw new Error('User info not found in AsyncStorage.');
-    }
-
-    const userInfo = JSON.parse(userInfoString);
-    const userId = userInfo.id; // Get the user ID from the userInfo
-
-    // console.log('Fetched comment using user ID:', userId);
-
-    // Step 1: Fetch user comments
-    const commentsResponse = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/user/${userId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const commentsData = commentsResponse.data;
-    const commentIDs = commentsData.map(comment => comment.id);
-
-    // console.log('Fetched User Comments:', commentsData);
-
-    // Step 2: Fetch replies in bulk using the comment IDs
-    const fetchRepliesForComments = async (commentIDs) => {
-      try {
-        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/replies`, {
-          params: {
-            commentIds: commentIDs.join(','), // Join IDs into a single string
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        
-        // Log the replies to confirm the format
-        // console.log('Fetched Replies:', response.data);
-        
-        // Return the fetched replies
-        return response.data;
-      } catch (error) {
-        console.error('Failed to fetch replies:', error);
-        return []; // Return an empty array on error
-      }
-    };
-
-    // Step 3: Fetch replies for all comments and map them back to their respective comments
-    const repliesData = await fetchRepliesForComments(commentIDs); // Fetch replies once based on comment IDs
-
-    const commentsWithReplies = commentsData
-      .map(comment => {
-        // Ensure each comment has its corresponding product data
-        const productDetails = comment.product || {}; // Assumes product details are nested in each comment
-    
-        // Filter replies based on the current comment ID and exclude replies from the comment's owner
-        const filteredReplies = repliesData.filter(
-          reply => reply.comment_id === comment.id && reply.user_id !== comment.userId
-        );
-    
-        // Return the comment with product details and valid replies if any are found
-        if (filteredReplies.length > 0) {
-          return {
-            ...comment,
-            product: productDetails, // Map product details to the comment
-            replies: filteredReplies, // Attach the replies to the comment
-          };
-        }
-        return null; // Filter out comments without valid replies
-      })
-      .filter(comment => comment !== null); // Keep only comments with valid replies
-    
-    // Log or use `commentsWithReplies` for rendering in your UI
-    // console.log("Comments with Replies and Products:", commentsWithReplies);
-    
-
-await updateRepliesNotifications(commentsWithReplies); // Save to AsyncStorage and set state
-    
-  } catch (error) {
-    console.error('Failed to fetch comments and replies:', error);
-    return null;
-  }
-};
-
-const updateRepliesNotifications = async (commentsWithReplies) => {
-  try {
-    // Ensure commentsWithReplies is a valid array
-    if (!Array.isArray(commentsWithReplies)) {
-      console.error('commentsWithReplies is not an array:', commentsWithReplies);
-      return;
-    }
-
-    // Retrieve existing replies notifications from AsyncStorage and parse them
-    const storedRepliesNotifications = await AsyncStorage.getItem('repliesNotifications');
-    const existingRepliesNotifications = storedRepliesNotifications ? JSON.parse(storedRepliesNotifications) : [];
-
-    // Ensure existingRepliesNotifications is an array
-    if (!Array.isArray(existingRepliesNotifications)) {
-      console.error('Existing replies notifications data is not an array:', existingRepliesNotifications);
-      return;
-    }
-
-    // Create a Set of existing notification IDs for quick lookup
-    const existingIdsSet = new Set(existingRepliesNotifications.map(notification => notification.id));
-
-    // Filter out replies notifications no longer in `commentsWithReplies`
-    const updatedRepliesNotifications = commentsWithReplies.filter(newNotification => {
-      // Keep new notifications or ones that already exist
-      if (existingIdsSet.has(newNotification.id)) {
-        return true; // Keep if it exists
-      }
-      return false; // Filter out if it doesn't exist in the current replies
-    });
-
-    // Add new replies notifications from `commentsWithReplies` that are not already in `existingRepliesNotifications`
-    commentsWithReplies.forEach(newNotification => {
-      if (!existingIdsSet.has(newNotification.id)) {
-        updatedRepliesNotifications.push(newNotification);
-      }
-    });
-
-    // Save the updated replies notifications list to AsyncStorage
-    await AsyncStorage.setItem('repliesNotifications', JSON.stringify(updatedRepliesNotifications));
-
-    // Set replies notifications in state
-    setRepliesNotifications(updatedRepliesNotifications);
-  } catch (error) {
-    console.error('Error updating replies notifications:', error);
-  }
-};
-
-
-
-// Combine notifications and repliesnotifications with the correct created_at date
-const combinedNotifications: CombinedNotification[] = [
-  ...notifications.map(notification => ({
-    ...notification,
-    type: 'notification',
-    createdAt: notification.created_at, // Use notification's created_at
-  })),
-  ...repliesnotifications.map(replyNotification => ({
-    ...replyNotification,
-    type: 'repliesnotification',
-    createdAt: replyNotification.replies[0]?.created_at || null, // Use the latest reply's created_at if it exists
-  })),
-];
-
-// Sort combined notifications by createdAt in descending order (latest first)
-const sortedCombinedNotifications = combinedNotifications.sort((a, b) => {
-  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-});
-
-// Log or use sortedCombinedNotifications for rendering
-// console.log('Sorted Combined Notifications:', sortedCombinedNotifications);
-
-
-
-
-// console.log('RepliesNotifications:', repliesnotifications); 
-// console.log('Notifications:', notifications);
-// console.log('Combined Notifications:', combinedNotifications);
+ 
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.inventory}>
-      <Text style={styles.header}>Notifications</Text>
-      <View >
-      {(Array.isArray(notifications) && notifications.length > 0) || 
-        (Array.isArray(repliesnotifications) && repliesnotifications.length > 0) ? (
-          <FlatList
-          data={combinedNotifications}
-          renderItem={({ item }) => {
-            
-
-            if ('replies' in item) {
-              // This item is a repliesnotification
-              // console.log("Item being rendered:", item);
-              return <RenderreplyNotifications item={item as repliesnotification} ViewNotification={ViewNotification} />;
-            }
-
-            // This item is a notification
-            return <RenderNotifications item={item as notification} ViewNotification={ViewNotification} />;
-          }}
-          keyExtractor={(item) => item.id.toString()} // Ensure id is a string
+        <Text style={styles.header}>Notifications</Text>
+        <FlatList
+          data={notifications}
+          renderItem={({ item }) => (
+            <NotificationItem
+              notification={item}
+              onPress={() => handleNotificationPress(item)}
+            />
+          )}
+          keyExtractor={(item) => item.id.toString()}
+          ListEmptyComponent={() => (
+            <Text style={{ textAlign: 'center', marginTop: 20 }}>No notifications available</Text>
+          )}
+          refreshing={isRefreshing} // This binds to your `isRefreshing` state
+          onRefresh={onRefresh}
         />
-      ) : (
-        <View style={styles.nonotifcontainer}>
-          <Text style={styles.notiftext}>No new notifications</Text>
-        </View>
-      )}
-    </View>
-    </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -655,12 +272,23 @@ export default Notif;
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
-    padding: 2, 
+    padding: 10, 
     backgroundColor: "#f0f0f0",
+  },
+  listContainer: {
+    flex: 1,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: { 
     fontSize: 18,
      fontWeight: 'bold',
+     borderBottomWidth: 5, // Add a border at the bottom
+     borderBottomColor: '#e0e0e0', // Light grey border
+     paddingBottom: 10, // Add some padding at the bottom
     },
   nonotifcontainer: {
       justifyContent: 'center', // Center vertically
@@ -678,6 +306,7 @@ const styles = StyleSheet.create({
     fontSize: 14 
   },
   inventory: {
+    paddingTop: 10, // Add some padding at the top
     paddingBottom: height * 0.1, // Adjust 5% of the screen height for padding
   },
   notificationContainer: {
@@ -731,6 +360,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888', // Grey for date text
     marginTop: 4,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#888',
+  },
+  placeholderContainer: {
+    flex: 1,
+    padding: 15,
+    justifyContent: 'center',
+  },
+  placeholderItem: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  placeholderImage: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#d1d1d1',
+    borderRadius: 25,
+    marginRight: 15,
+  },
+  placeholderText: {
+    width: '70%',
+    height: 15,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 5,
   },
 });
 

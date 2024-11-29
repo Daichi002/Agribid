@@ -1,12 +1,15 @@
 import { View, Text, TextInput, Button, Alert, StyleSheet, TouchableOpacity } from 'react-native'
-import React, { useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState } from 'react'
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { useAlert } from '../components/AlertContext';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthContext } from '../components/authcontext'; // Import the useAuth hook
+import BASE_URL from '../components/ApiConfig';
 
 const verifynumer = () => {
+      const { login } = useContext(AuthContext);
       const [isResendDisabled, setIsResendDisabled] = useState(true);
       const [countdown, setCountdown] = useState(60); // start with 1 minute
       const [isLoading, setIsLoading] = useState(false);
@@ -42,13 +45,13 @@ const verifynumer = () => {
         const sendOtp = async (Phoenenumber : any) => {
           
           try {
-            const response = await axios.post('http://192.168.31.160:8000/api/send-otp', {
+            const response = await axios.post(`${BASE_URL}/api/send-otp`, {
               to: Phonenumber,
             });
             console.log(response.data);
 
             if (response.status === 200) {
-              showAlert('Success, OTP sent successfully!', 3000);
+              showAlert('Success, OTP sent successfully!', 3000, 'green');
               setIsResendDisabled(true);
               setCountdown(60); // Reset countdown to 60 seconds
             }
@@ -79,7 +82,7 @@ const verifynumer = () => {
               console.log('Verifying OTP:', otp, Phonenumber);
       
               // Verify the OTP
-              const verifyResponse = await axios.post('http://192.168.31.160:8000/api/verify-otp', {
+              const verifyResponse = await axios.post(`${BASE_URL}/api/verify-otp`, {
                   otp: Number(otp),
                   to: Phonenumber,
               });
@@ -103,7 +106,7 @@ const verifynumer = () => {
               console.log('Sending registration request with data:', registrationData);
       
               // Register the user
-              const registerResponse = await axios.post('http://192.168.31.160:8000/api/register', registrationData, {
+              const registerResponse = await axios.post(`${BASE_URL}/api/register`, registrationData, {
                   headers: {
                       'Content-Type': 'application/json',
                   },
@@ -127,7 +130,7 @@ const verifynumer = () => {
       
       const handleUserLogin = async () => {
           try {
-              const response = await axios.post('http://192.168.31.160:8000/api/login', {
+              const response = await axios.post(`${BASE_URL}/api/login`, {
                   Phonenumber: Phonenumber,
                   password: password,
               }, {
@@ -148,7 +151,8 @@ const verifynumer = () => {
               Alert.alert("Success", "User registered and logged in successfully!");
       
               // Navigate to the desired screen
-              showAlert('User Created And Logged In!', 3000);
+              showAlert('User Created And Logged In!', 3000, 'green');
+              login(); // Log the user in
               router.navigate("/sell");
       
           } catch (error) {

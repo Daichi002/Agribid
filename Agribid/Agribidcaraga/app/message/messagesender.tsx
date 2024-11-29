@@ -6,6 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { useAlert } from '../../components/AlertContext';
+import ProductDetails from '../../components/productdetailoffer';
+import BASE_URL from '../../components/ApiConfig';
 
 import Pusher from 'pusher-js/react-native';
 import axios, { AxiosResponse } from 'axios'; // Using axios for API requests
@@ -38,7 +41,7 @@ interface receiver {
 }
 
 interface Message {
-  id: string;
+  id: never;
   text: string;
   productid: string;
   senderId: string;
@@ -104,7 +107,7 @@ const RenderMessage = React.memo(({ item, currentUserId, OriginalImage, handleli
     if (uri && (uri.endsWith('.jpg') || uri.endsWith('.jpeg') || uri.endsWith('.png') || uri.endsWith('.gif'))) {
       // Construct full URL if needed
       if (!uri.startsWith('http')) {
-        uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}`;
+        uri = `${BASE_URL}/storage/message/images/${uri}`;
       }
   
       setLoading(true);
@@ -212,7 +215,12 @@ const MessageScreen = () => {
   const [imageUri, setImageUri] = useState<string | null>(null); // Specify the type as string or null
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
-
+  const [offervisible, setOffervisible] = useState(false);
+  const [curretuseraddress, setCurrentuserAddress] = useState('');
+  const [offer, setOffer] = useState(0); // Your offer state
+  const [promoMessage, setPromoMessage] = useState(''); // Error message for offer
+  const [offeredproduct, setOfferedproduct] = useState<Product | null>(null);
+  const { showAlert } = useAlert();
 
 
    // Load and cache the image when the image URI is provided
@@ -226,7 +234,7 @@ const MessageScreen = () => {
   // Function to set image URI and open modal
   const OriginalImage = async (uri: string) => {
     // Construct the full image URI
-    const fullUri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}?${new Date().getTime()}`;
+    const fullUri = `${BASE_URL}/storage/message/images/${uri}?${new Date().getTime()}`;
     console.log('Image URI:', fullUri); // Log the image URI for debugging
 
     await loadImage(fullUri); // Load the image
@@ -242,6 +250,7 @@ const MessageScreen = () => {
   
         if (userInfo) {
           const user = JSON.parse(userInfo);
+          setCurrentuserAddress(user.Address);
           console.log('parsed user:', user);
   
           if (user && user.id) {
@@ -366,7 +375,7 @@ useEffect(() => {
           receiverId: productuserId,
         };
   
-        const response = await axios.get(`http://192.168.31.160:8000/api/getmessagesender`, {
+        const response = await axios.get(`${BASE_URL}/api/getmessagesender`, {
           params,
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -521,7 +530,7 @@ const sendMessage = async () => {
     // console.log('newmessage', newMessage)
 
     // Check for an existing session
-    const responseCheck = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/session', {
+    const responseCheck = await axios.get(`${BASE_URL}/api/messages/session`, {
       params: {
         product_id: productId,
         sender_id: currentUserId,
@@ -532,7 +541,7 @@ const sendMessage = async () => {
 
     let session = responseCheck.data.session;
     if (!session) {
-      const responseMaxSession = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/max-session', {
+      const responseMaxSession = await axios.get(`${BASE_URL}/api/messages/max-session`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       session = responseMaxSession.data.maxSession + 1;
@@ -541,7 +550,7 @@ const sendMessage = async () => {
     formData.append('sessions', session);
 
     // Send the message
-    const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/messages', formData, {
+    const response = await axios.post(`${BASE_URL}/api/messages`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data',
@@ -616,7 +625,7 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
           return;
         }
   
-        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/receiver/${productuserId}`, {
+        const response = await axios.get(`${BASE_URL}/api/receiver/${productuserId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -661,17 +670,14 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
       }
     }, [messages])
   );
-
-  const rate = () => {
-    if (productId && currentUserId) {
-      navigation.navigate('Rating', { productId: productId, userId: currentUserId } as never);
-      setReportModalVisible(false)
-    }
-  };
+  
   const report = () => {
-    if (productId && currentUserId) {
+    if (productId && currentUserId && messages.length > 0) {
+      console.log('Navigating to report message:', messages[0]?.id);
       navigation.navigate('Reports/reportmessage', { messageId: messages[0]?.id, usermessageId: receiver?.id } as never);
       setReportModalVisible(false)
+    }else{
+      alert('An Error occured while trying to report message');
     }
   };
 
@@ -712,6 +718,131 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
       navigation.navigate('userproduct', { userId: receiver?.id });
     }
   };
+
+
+
+  const fetchproduct = async (productId: any) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.error('No auth token found');
+        return;
+      }
+      console.log('Fetching product data...', productId);
+      const response = await axios.get(`${BASE_URL}/api/offersproduct/${productId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+  
+      setOfferedproduct(response.data);
+      // You can handle the response here
+      console.log('Product data:', response.data);
+  
+    } catch (error) {
+      console.error('Error fetching product:', error);
+    }
+  };
+
+
+  
+  const getQuantityNumber = (quantity: string | undefined | null) => {
+    if (!quantity || typeof quantity !== 'string') return 0; // Ensure quantity is a valid string
+    const match = quantity.match(/\d+/); // Extract digits from the string
+    return match ? parseInt(match[0], 10) : 0; // Return the first matched number, or 0 if no match
+  };
+  
+  const getQuantityExtension = (quantity: string | undefined | null) => {
+    if (!quantity || typeof quantity !== 'string') return ''; // Ensure quantity is a valid string
+    const match = quantity.match(/[a-zA-Z]+/); // Extract letters from the string
+    return match ? match[0].trim() : ''; // Return the first matched extension or an empty string
+  };
+  
+
+// const getQuantityNumber = (quantity) => parseInt(quantity.match(/\d+/)?.[0] || 0, 10);
+const quantityNumber = offeredproduct ? getQuantityNumber(offeredproduct.quantity) : 0;
+const remainingQuantity = Math.max(quantityNumber - offer, 0); 
+
+// Function to increase offer value
+const increaseOffer = () => {
+  if (offer < quantityNumber) {
+    setOffer(prevOffer => prevOffer + 1);  // Increase offer if less than quantity
+    setPromoMessage('');  // Clear promo message if valid
+  } else {
+    setPromoMessage('Offer cannot exceed available quantity');
+  }
+};
+
+// Function to decrease offer value
+const decreaseOffer = () => {
+  if (offer > 0) {
+    setOffer(prevOffer => prevOffer - 1);  // Decrease offer value if greater than 0
+    setPromoMessage('');  // Clear promo message if valid
+  }
+};
+  
+  const handleConfirm = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.error('No auth token found');
+        alert('Authentication token is missing. Please log in again.');
+        return;
+      }
+  
+      // Extract the extension from the quantity
+      const extension = getQuantityExtension(offeredproduct?.quantity || ''); // Use offeredproduct.quantity
+      const offerWithExtension = `${offer} ${extension}`; // Combine the offer with the extension
+  
+      console.log('Sending Offer:', curretuseraddress, offerWithExtension, productId, currentUserId, productuserId);
+  
+      const response = await axios.post(
+        `${BASE_URL}/api/offers`,
+        { 
+          location: curretuseraddress, 
+          offer: offerWithExtension, // Use the offer with extension
+          productId: productId,
+          buyerId: currentUserId,
+          sellerId: productuserId,
+        },      
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+  
+      // Handle the response
+      if (response.status === 201 || response.status === 200) {
+        console.log('Offer sent successfully:', response.data);
+        showAlert('Offer Sent To Seller!', 3000, 'green');
+        setOffervisible(false);
+        setOfferedproduct(null); // Clear the product data
+        setOffer(0);
+      } else {
+        console.error('Error Submitting Offer:', response.status, response.data);
+        alert(`Error: ${response.data?.message || 'Failed to Submit Offer.'}`);
+      }
+    } catch (error) {
+      console.error('Error occurred saving Offer:', error);
+  
+      // Handle specific error types
+      if (axios.isAxiosError(error) && error.response) {
+        // Server responded with a status other than 2xx
+        alert(`Server Error: ${error.response.data?.message || 'Unable to Send Offer.'}`);
+      } else if (axios.isAxiosError(error) && error.request) {
+        // Request was made but no response was received
+        alert('Network Error: Please check your connection and try again.');
+      } else {
+        // Other errors
+        if (error instanceof Error) {
+          alert(`Unexpected Error: ${error.message}`);
+        } else {
+          alert('Unexpected Error occurred.');
+        }
+      }
+    }
+  };
   
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -735,6 +866,69 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
   </TouchableOpacity>
 </View>
 
+
+{/* modal for creating offer */}
+<Modal
+        animationType="slide"
+        transparent={true}
+        visible={offervisible}
+        onRequestClose={() => setOffervisible(false)}
+      >
+        <View style={styles.OfferModalContainer}>
+          <View style={styles.OfferModalContent}>
+            <Text style={styles.OfferModalTitle}>Create Offer</Text>
+
+            <View style={styles.offerContainer}>
+            {offeredproduct && (
+            <ProductDetails product={offeredproduct} remainingQuantity={remainingQuantity} />
+          )}
+            </View>
+
+            {/* Offer Input */}
+            <Text>Offer Quantity</Text>
+              {promoMessage && <Text style={styles.promoMessage}>{promoMessage}</Text>}
+              <View style={styles.offerinputContainer}>
+              <TouchableOpacity style={styles.arrowButton} onPress={decreaseOffer}>
+                <Text style={styles.arrowText}>-</Text>
+              </TouchableOpacity>
+
+              {/* add the extension of the current quantity to the offered quantity */}
+
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your offer"
+                value={offer.toString()}  // Convert number to string for TextInput
+                onChangeText={(text) => {
+                  const newOffer = Number(text);
+                  if (newOffer <= quantityNumber) {
+                    setOffer(newOffer);
+                    setPromoMessage('');  // Clear promo message when valid
+                  } else {
+                    setPromoMessage('Offer cannot exceed available quantity');
+                  }
+                }}
+                keyboardType="numeric"
+              />
+
+              <TouchableOpacity style={styles.arrowButton} onPress={increaseOffer}>
+                <Text style={styles.arrowText}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Action Buttons */}
+            <TouchableOpacity style={styles.button} onPress={handleConfirm}>
+              <Text style={styles.buttonText}>Submit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={() => setOffervisible(false)}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
 {/* Report Modal for creating a report */}
 <Modal
         animationType="slide"
@@ -746,10 +940,15 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
           <View style={styles.reportModalContent}>
             <Text style={styles.reportModalTitle}>Customer Experience</Text>
 
-            <TouchableOpacity style={styles.rateButton} onPress={rate}>
+            <TouchableOpacity style={styles.rateButton} 
+                onPress={() => {
+                setReportModalVisible(false);  // Close the ReportModal
+                setOffervisible(true);    // Open the OfferModal
+                fetchproduct(productId);  // Fetch product data
+              }}>
               <View style={styles.buttonContent}>
-                <Image source={icons.rate} style={styles.ExpIcon} resizeMode="contain" />
-                <Text style={styles.rateButtonText}>Rate </Text>
+                <Image source={icons.offer} style={styles.ExpIcon} resizeMode="contain" />
+                <Text style={styles.rateButtonText}> Create Offer </Text>
               </View>
             </TouchableOpacity>
 
@@ -1055,6 +1254,96 @@ menuIcon: {
   position: 'absolute',
   right: 10,
 },
+OfferModalContainer: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0, 0, 0, 0.5)', // semi-transparent background overlay
+  height: '100%', // Adjusted to ensure the modal occupies the full screen height
+},
+OfferModalContent: {
+  width: '80%',
+  padding: 25,
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 5, // shadow for Android
+  minHeight: 250, // Minimum height of the modal to prevent input from being too small
+  justifyContent: 'space-between', // Ensure the content is spaced evenly
+},
+OfferModalTitle: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#333',
+  marginBottom: 20,
+  textAlign: 'center',
+},
+offerinputContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 20,
+},
+arrowButton: {
+  backgroundColor: '#f1f1f1',
+  padding: 10,
+  borderRadius: 5,
+  marginHorizontal: 5,
+},
+arrowText: {
+  fontSize: 20,
+  fontWeight: '600',
+},
+offerContainer: {
+  width: '100%',
+  backgroundColor: '#fff',
+  borderRadius: 12,
+ 
+},
+offerImage: {
+  width: '100%',
+  height: 200,
+  borderRadius: 10,
+  marginBottom: 10,
+},
+offerTitle: {
+  fontSize: 22,
+  fontWeight: '600',
+  color: '#333',
+  marginBottom: 10,
+},
+offerPrice: {
+  fontSize: 18,
+  color: '#007bff',
+  marginBottom: 5,
+},
+offerQuantity: {
+  fontSize: 16,
+  color: '#555',
+},
+ // Placeholder Styles
+ placeholderImage: {
+  width: '100%',
+  height: 200,
+  backgroundColor: '#e0e0e0',
+  borderRadius: 10,
+  marginBottom: 10,
+},
+placeholderText: {
+  height: 20,
+  backgroundColor: '#e0e0e0',
+  marginBottom: 10,
+  borderRadius: 4,
+},
+promoMessage: {
+  color: 'red',
+  fontSize: 14,
+  marginBottom: 10,
+  textAlign: 'center',
+},
 reportModalContainer: {
   flex: 1,
   justifyContent: 'center',
@@ -1134,12 +1423,15 @@ title: {
   textAlign: 'center',
 },
 button: {
-  backgroundColor: '#1E90FF',
+  backgroundColor: '#4CAF50',
   padding: 10,
   borderRadius: 5,
   marginTop: 10,
   width: '100%',
   alignItems: 'center',
+},
+cancelButton: {
+  backgroundColor: '#DC3545',
 },
 buttonGreen: {
   // backgroundColor: '#32CD32',

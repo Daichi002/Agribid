@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import FormField from "../components/formfield";
 import { icons } from '../constants';
 import { useAlert } from '../components/AlertContext';
+import BASE_URL from '../components/ApiConfig';
 
 const ForgotPassword = () => {
   const navigation = useNavigation();
@@ -27,17 +28,17 @@ const ForgotPassword = () => {
   const handlePhoneNumberSubmit = async () => {
     console.log(Phonenumber);
     try {
-      const response = await axios.post('http://192.168.31.160:8000/api/check-phone-exist', 
+      const response = await axios.post(`${BASE_URL}/api/check-phone-exist`, 
         { Phonenumber: Phonenumber });
       
       // Assuming 'message' is returned from the Laravel response
       if (response.status === 200) {
-        const response = await axios.post('http://192.168.31.160:8000/api/send-otp', {
+        const response = await axios.post(`${BASE_URL}/api/send-ot`, {
             to: Phonenumber,
           });
           if (response.status === 200) {
             setStep(2);
-            showAlert('Your One-Time Password (OTP) has been successfully sent!', 3000);
+            showAlert('Your One-Time Password (OTP) has been successfully sent!', 3000, 'green');
           } else {
             Alert.alert('Error', 'OTP error. Please try again.');
           }
@@ -54,7 +55,7 @@ const ForgotPassword = () => {
   // Verify OTP
   const handleOtpSubmit = async () => {
     try {
-      const response = await axios.post('http://192.168.31.160:8000/api/verify-otp', 
+      const response = await axios.post(`${BASE_URL}/api/verify-otp`, 
         { to:Phonenumber, otp: form.otp });
       if (response.status === 200) {
         setStep(3);
@@ -74,11 +75,12 @@ const ForgotPassword = () => {
       }
       console.log(form.newPassword);
     try {
-      const response = await axios.post('http://192.168.31.160:8000/api/updatepassword', 
+      const response = await axios.post(`${BASE_URL}/api/updatepassword`, 
         { Phonenumber, newPassword: form.newPassword });
       if (response.status === 200) {
         // Alert.alert('Success', 'Password has been updated.');
-        handleLoginSuccess();
+        showAlert('Success Password has been updated.!', 3000, 'green');
+    
         setform({
             Phonenumber: '',
             otp: '',
@@ -93,10 +95,7 @@ const ForgotPassword = () => {
     }
   };
 
-  const handleLoginSuccess = () => {
-    setShowAlert(true);
-    setTimeout(() => setShowAlert(false), 3000); // Dismiss alert after 3 seconds
-  };
+  
 
   return (
     <SafeAreaView style={styles.safeArea}>

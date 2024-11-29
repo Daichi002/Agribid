@@ -18,19 +18,26 @@ class Reply extends Model
     ];
 
     // Define the relationship with the Comment model
-    public function comment()
-    {
-        return $this->belongsTo(Comment::class);
-    }
-
-    // Define the relationship with the User model
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id'); // Correct foreign key in replies table
     }
-    public function repliesTo() 
-    { 
-        return $this->belongsTo(Reply::class, 'replies_to'); 
+
+
+
+    public function comment()
+    {
+        return $this->belongsTo(Comment::class, 'comment_id');
     }
+
+    
+
+    public function replies()
+    {
+        return $this->hasMany(Reply::class, 'replies_to');
+    }
+
+
+
 }
 

@@ -12,6 +12,7 @@ import eyeHide from "../assets/icons/eye-hide.png";
 import eye from "../assets/icons/eye.png";
 import play from "../assets/icons/play.png";
 import Agribid from "../assets/icons/Agribid.png";
+import LoadingAgribid from "../assets/icons/LoadingAgribid.png";
 import slider from "../assets/icons/slider.png";
 import Agribidlogo from "../assets/icons/Agribid.jpg";
 import srp from "../assets/icons/srp.png";
@@ -23,9 +24,19 @@ import contact from "../assets/icons/contact.png";
 import contactnoti from "../assets/icons/contactnoti.png";
 import report from "../assets/icons/report.png";
 import notif from "../assets/icons/notif.png";
+import notifindi from "../assets/icons/notifindi.png";
 import create2 from "../assets/icons/create2.png";
 import update from "../assets/icons/update.png";
 import rate from "../assets/icons/rate.png";
+import offer from "../assets/icons/offer.png";
+import soldout from "../assets/icons/Soldout.png";
+import editprofile from "../assets/icons/editprofile.png";
+import history from "../assets/icons/history.png";
+import torate from "../assets/icons/torate.png";
+import approve from "../assets/icons/approve.png";
+import ribbon from "../assets/icons/ribbon.png";
+import srptag from "../assets/icons/srptag.png";
+import srptag2 from "../assets/icons/srptag2.png";
 
 export default {
   play,
@@ -42,6 +53,7 @@ export default {
   eyeHide,
   eye,
   Agribid,
+  LoadingAgribid,
   slider,
   srp,
   Agribidlogo,
@@ -54,6 +66,16 @@ export default {
   report,
   create2,
   notif,
+  notifindi,
   update,
   rate,
+  soldout,
+  offer,
+  editprofile,
+  history,
+  torate,
+  approve,
+  ribbon,
+  srptag,
+  srptag2,
 };

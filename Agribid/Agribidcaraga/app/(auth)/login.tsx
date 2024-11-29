@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, Image, TextInput, TouchableOpacity } from 'react-native'
-import React, { useState } from 'react'
+import React, { useContext, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from "expo-router";
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -11,10 +11,13 @@ import CustomButton from "../../components/CustomButton";
 import { icons } from "../../constants";
 import axios from 'axios';
 import { Alert } from 'react-native';
+import { AuthContext } from '../../components/authcontext'; // Import the useAuth hook
+import BASE_URL from '../../components/ApiConfig'; // for centralize ApiConfig
 
 
 
 const Login = () => {
+  const { login } = useContext(AuthContext);
   const [validationError ,setValidationError] = useState({});
   const navigation = useNavigation();
   const [isSubmitting, setSubmitting] = useState(false);
@@ -45,9 +48,8 @@ const Login = () => {
   : `+63${form.Phonenumber}`;
 
     setIsLoading(true);
-
     try {
-        const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/login', {
+        const response = await axios.post(`${BASE_URL}/api/login`, {
             Phonenumber: formattedPhonenumber,
             password: form.password
         }, {
@@ -72,12 +74,14 @@ const Login = () => {
           });
           // Simulate a loading delay for a smoother UX experience
           setTimeout(() => {
-            showAlert('LogIn Successfully!', 3000);
+            showAlert('LogIn Successfully!', 3000, 'green');
             // Alert.alert("Success", "Logged in successfully!");
 
             // Navigate to the tabs screen after successful login
             setIsLoading(false);
             setSubmitting(false);
+            console.log('Logging in...');
+            login(); // Set the authentication state to true
             router.navigate("/sell");
         }, 2000);
 

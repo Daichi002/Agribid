@@ -1,213 +1,212 @@
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, ActivityIndicator } from "react-native";
-import * as FileSystem from 'expo-file-system';
+import { View, Text, Image, StyleSheet, RefreshControl, ScrollView, FlatList } from "react-native";
 import axios from "axios";
 
+import CommodityPriceList from '../../components/CommodityPriceList';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { icons } from "../../constants";
+import Toast from 'react-native-simple-toast';
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const cacheImage = async (uri: string) => {
-  const filename = uri.split('/').pop();
-  const fileUri = `${FileSystem.documentDirectory}${filename}`;
-  const info = await FileSystem.getInfoAsync(fileUri);
-
-  if (info.exists) {
-    return fileUri; // Return cached image URI
-  } else {
-    const response = await FileSystem.downloadAsync(uri, fileUri);
-    return response.uri; // Return newly downloaded image URI
-  }
-};
-interface ProductImageProps {
-  imageUri: string;
-}
-
-const ProductImage = React.memo(({ imageUri }: ProductImageProps) => {
-  return <Image source={{ uri: imageUri }} style={styles.productImage} />;
-});
-
-interface ProductItemProps {
-  item: {
-    id: string;
-    title: string;
-    description: string;
-    locate: string;
-    created_at: string;
-    image: string;
-  };
-}
-
-const ProductItem = React.memo(({ item }: ProductItemProps) => {
-  // console.log('Rendering ProductItem for:', item);
-
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  // console.log('Rendering ProductItem for:', imageUri);
-
-  useEffect(() => {
-    const loadImage = async () => {
-      try {
-        const uri = `http://192.168.31.160:8000/storage/product/images/${item.image}`;
-        const cachedUri = await cacheImage(uri);
-        setImageUri(cachedUri);
-      } catch (error) {
-        console.error('Error loading image:', error);
-      }
-    };
-    loadImage();
-  }, [item.image]);
-
-  if (!item) {
-    console.warn('Undefined item:', item);
-    return null;
-  }
-  
-  const { id, title, description, locate, created_at } = item;
-  if (!id) {
-    console.warn('Item ID is undefined:', item);
-    return null;
-  }
-
-  return (
-    <View style={styles.productItem}>
-      <View style={styles.imagecontainer}>
-        {imageUri ? (
-          <ProductImage imageUri={imageUri} />
-        ) : (
-          <ActivityIndicator size="small" color="#0000ff" />
-        )}
-      </View>
-      <View style={styles.productdetailscontainer}>
-        <Text style={styles.productTitle}>{title}</Text>
-        <Text style={styles.productDescription}>Description: {description}</Text>
-        <Text style={styles.productDescription}>Located: {locate}</Text>
-        <Text style={styles.productDate}>
-          Date Created: {new Date(created_at).toLocaleDateString()}
-        </Text>
-      </View>
-    </View>
-  );
-});
+import BASE_URL from '../../components/ApiConfig';
 
 
 const Srp = () => {
-  const [srp, setSrp] = useState<{ id: string; title: string; description: string; locate: string; created_at: string; image: string; }[]>([]);
-  const [sortOrder, setSortOrder] = useState("desc");
+  const [srp, setSrp] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // const sortedSrp = SortedSrp(srp, sortOrder);
 
   useEffect(() => {
-    fetchProducts();
+    // dropstorage();
+    getSrpData();
   }, []);
 
-  // fetch product from the server
-  const fetchProducts = async () => {
-    try {
+
+  const processSrpData = (data: { [x: string]: any; }) => {
+    // Check if data is an object, as it has dynamic keys (like '2024-11-24 - 2024-11-30')
+    if (typeof data !== 'object' || Array.isArray(data)) {
+        console.error('Invalid data format:', data);
+        return []; // Return an empty array if the data is not in the expected format
+    }
+
+    // Convert the object to an array of week data
+    const processedData = Object.keys(data).map((weekKey) => {
+        const weekInfo = data[weekKey];
+
+        // Ensure 'weekdata' is present and is an array
+        if (!Array.isArray(weekInfo.weekdata)) {
+            console.error(`Invalid 'weekdata' for week ${weekKey}:`, weekInfo.weekdata);
+            weekInfo.weekdata = []; // Fallback to an empty array
+        }
+
+        // Extract the data for each week
+        return {
+            week: weekInfo.week,
+            lastWeek: weekInfo.lastWeek,
+            weekdata: weekInfo.weekdata, // 'weekdata' should already be an array
+        };
+    });
+
+    return processedData; // Return the processed data as an array
+};
+
+
+
+// Example usage with API data
+const fetchSrp = async () => {
+  try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        console.error('No auth token found');
-        return;
+          console.error('No auth token found');
+          return;
       }
-  
-      const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+
+      // Fetch the data from the server
+      const response = await axios.get(`${BASE_URL}/api/srp`, {
+          headers: { Authorization: `Bearer ${token}` },
       });
-  
-      // console.log("Raw API Response:", response.data); // Log the raw API response
-  
-      const enhancedProducts = response.data.map((product: { id: string; title: string; description: string; locate: string; created_at: string; image: string; }) => {
-        if (!product.id) {
-          console.warn('Product without ID:', product);
-        }
-        return {
-          ...product,
-        };
-      }).filter((product: { id: string }) => product && product.id); // Ensure valid products with IDs
-  
-      // console.log("Enhanced Products:", enhancedProducts);
-  
-      setSrp(enhancedProducts);
-      await updateAsyncStorage(enhancedProducts);
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error('Axios error fetching products:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          headers: error.response?.headers,
-        });
-      } else if (error instanceof ReferenceError) {
-        console.error('ReferenceError fetching products:', error.message);
+
+      const data = response.data;
+      // console.log('Raw API Data:', data);
+      
+      // Process the data (grouping is already done by the backend)
+      const processedData = processSrpData(data);
+      // console.log('Processed Data:', JSON.stringify(processedData, null, 2));
+      
+      // Ensure processedData is an array before iterating
+      if (Array.isArray(processedData)) {
+          // Retrieve the existing SRP data from AsyncStorage
+          const storedData = await AsyncStorage.getItem('srpData');
+          let currentData = storedData ? JSON.parse(storedData) : [];
+      
+          // Iterate over the new data and update the existing data
+          processedData.forEach((newWeekData) => {
+              // Check if the current week already exists in the stored data
+              const existingWeekIndex = currentData.findIndex((weekData: { week: any; }) => weekData.week === newWeekData.week);
+      
+              if (existingWeekIndex !== -1) {
+                  // If the week already exists, update it
+                  currentData[existingWeekIndex] = newWeekData;
+              } else {
+                  // If the week doesn't exist, add it as a new entry
+                  currentData.push(newWeekData);
+              }
+          });
+      
+          // Save the updated data to AsyncStorage
+          await AsyncStorage.setItem('srpData', JSON.stringify(currentData));
+          console.log('SRP data updated in AsyncStorage successfully!');
       } else {
-        console.error('Unexpected error fetching products:', error);
+          console.error('Processed data is not an array:', processedData);
       }
-    }
-  };
-  
-  
-
-   // save the new data to asyncstorage for a more faster render
-   const updateAsyncStorage = async (newData: any[]) => {
-    try {
-      // Fetch current data from AsyncStorage
-      const existingData = await AsyncStorage.getItem('srp');
-      let currentData = existingData ? JSON.parse(existingData) : [];
-  
-      // Create a map of current data for quick lookup
-      const currentDataMap = new Map(currentData.map((item: { id: string }) => [item.id, item]));
-  
-      // Update existing entries and add new ones
-      newData.forEach(newItem => {
-        currentDataMap.set(newItem.id, newItem);
-      });
-  
-      // Convert map back to array
-      const updatedData = Array.from(currentDataMap.values());
-  
-      // Save updated data to AsyncStorage
-      await AsyncStorage.setItem('srp', JSON.stringify(updatedData));
-      // console.log('Srp AsyncStorage.', updatedData);
-      // console.log('Srp AsyncStorage updated successfully.');
-    } catch (error) {
-      console.error('Failed to update AsyncStorage:', error);
-    }
-  };
+  } catch (error) {
+      if (axios.isAxiosError(error)) {
+          console.error('Axios error fetching srp:', error.message, error.response?.data);
+      } else {
+          console.error('Unexpected error fetching srp:', error);
+      }
+  }
+};
 
 
-  const sortSrp = (srp: { created_at: string }[], sortOrder: string) => {
-    return srp.sort((a, b) => {
-      const dateA = new Date(a.created_at);
-      const dateB = new Date(b.created_at);
-      return sortOrder === "desc" ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
-    });
-  };
 
-const sortedSrp = sortSrp(srp, sortOrder);
+
+const getSrpData = async () => {
+  try {
+      // Retrieve stored data from AsyncStorage
+      const storedData = await AsyncStorage.getItem('srpData');
+      
+      if (storedData) {
+          const data = JSON.parse(storedData); // Parse the JSON string into an object
+          console.log("Retrieved data from AsyncStorage:", JSON.stringify(data, null, 2));
+
+          // Check if 'data' is an array before attempting to iterate
+          if (Array.isArray(data)) {
+              // Iterate over the weeks
+              data.forEach((weekData, weekIndex) => {
+                  console.log(`Week ${weekIndex + 1}:`, weekData.week); // Log week range
+
+                  // Ensure 'weekdata' exists and is an array
+                  if (Array.isArray(weekData.weekdata)) {
+                      // Iterate over the categories for the week
+                      weekData.weekdata.forEach((category: any, categoryIndex: number) => {
+                          // console.log(`  Category ${categoryIndex + 1}: ${category.category}`);
+                          // console.log(`    Items:`, category.items);
+                      });
+                  } else {
+                      console.error(`Invalid weekdata for week ${weekIndex + 1}:`, weekData.weekdata);
+                  }
+              });
+
+              // Set the state with the retrieved data
+              setSrp(data);
+          } else {
+              console.error("Retrieved data is not in the expected array format:", data);
+          }
+      } else {
+          console.log("No data found in AsyncStorage");
+      }
+  } catch (error) {
+      console.error("Error retrieving data from AsyncStorage:", error);
+  }
+};
+
+
+
+
+
+const dropstorage = async () => {
+  try {
+    await AsyncStorage.removeItem('srpData');
+    console.log('SRP data dropped from AsyncStorage successfully!');
+  } catch (error) {
+    console.error('Error dropping SRP data from AsyncStorage:', error);
+  }
+};
+
+
+
 
 const onRefresh = useCallback(async () => {
   setIsRefreshing(true);
-  await fetchProducts();
+  await fetchSrp();
+  await getSrpData();
+  Toast.show('Srp List updated', Toast.SHORT);
   setIsRefreshing(false);
 }, []);
 
+
   return (
     <SafeAreaView style={styles.container}>
-<FlatList
-  data={sortedSrp}
-  renderItem={({ item }) => <ProductItem item={item} />} 
-  keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString())} 
-  contentContainerStyle={styles.inventory}
-  extraData={sortedSrp}
-  refreshControl={
-    <RefreshControl
-      refreshing={isRefreshing}
-      onRefresh={onRefresh}
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+        <Image
+          source={icons.Agribid}
+          style={styles.icon} // Use a separate style for better control
+        />
+        </View>
+        <View style={styles.textContainer}>
+          <Text style={styles.titleText}>
+            AVERAGE WEEKLY PRICES OF SELECTED AGRICULTURAL COMMODITIES
+          </Text>
+          <Text style={styles.mainText}>WEEKLY PRICE MONITORING</Text>
+          <Text style={styles.subText}>AGUSAN DEL NORTE - BUTUAN CITY</Text>
+        </View>
+      </View>
+
+      <FlatList
+      data={srp || []} // Use an empty array if srp is null or undefined
+      renderItem={({ item }) => <CommodityPriceList data={item} />} // Render each item in CommodityPriceList
+      keyExtractor={(item, index) => index.toString()} // Key extractor for flat list
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh} // Trigger onRefresh when pulled
+        />
+      }
+      style={styles.listcontainer}
+      ListEmptyComponent={<Text>Loading...</Text>} // Show loading text if srp is empty
     />
-  }
-/>
     </SafeAreaView>
   )
 }
@@ -219,6 +218,51 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 5,
     backgroundColor: "#f0f0f0",
+  },
+  listcontainer:{
+    width: '100%',
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'center',  // Center everything horizontally
+    alignItems: 'flex-start',      // Center the items vertically
+    marginBottom: 5,
+    backgroundColor: '#28a745',
+  },
+  icon: {
+    width: 150,    // Set a fixed width for the icon
+    height: 150,    // Adjust the height to match the combined text height
+    resizeMode: 'contain',  // Adjust the icon size to fit the container
+    overflow: 'hidden',    // Hide any overflow from the container
+      },
+  logoContainer: {
+        width: 80,
+        height: 80,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+  textContainer: {
+    padding: 5,  // Add padding around the text
+    alignContent  : 'center',
+    justifyContent: 'center',  // Vertically center the text
+    alignItems: 'flex-start',  // Horizontally align the text to the start
+  },
+  titleText: {
+    fontSize: 8,  // Adjust font size as needed for readability
+    fontWeight: 'bold',
+    textAlign: 'center',  // Center text
+  },
+  mainText: {
+    fontSize: 20,     // Larger font size for the main title
+    fontWeight: 'bold',
+    textAlign: 'center',  // Center text
+  },
+  subText: {
+    fontSize: 12,     // Smaller font size for the location text
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   viewButton: {
     backgroundColor: "black", // Background color
@@ -248,15 +292,6 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     width: 90,
     height: 40,
-  },
-  icon: {
-    width: 30,  // Adjust width as needed
-    height: 30,  // Adjust height as needed
-  },
-  subText: {
-    marginTop: 10,
-    fontSize: 14,
-    textAlign: "center",
   },
   linkText: {
     color: "#0066cc",

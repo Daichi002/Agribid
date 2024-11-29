@@ -1,18 +1,19 @@
 
 import { View, Text, ScrollView, StyleSheet, Image, Alert, Modal, Button, TouchableOpacity, TextInput } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Link, router } from "expo-router";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker'; // Make sure you have the Picker library installed
-import CustomAlert from '../../components/customeAlert';
 
 import FormField from "../../components/formfield";
 import CustomButton from "../../components/CustomButton";
 import { icons } from "../../constants";
+import BASE_URL from '../../components/ApiConfig';
 
 
 const Signup = () => {
+
   const [isSubmitting, setSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -103,7 +104,7 @@ interface LookupMap {
     
     try {
       // Check if the phone number already exists
-      const checkResponse = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/check-phone', {
+      const checkResponse = await axios.get(`${BASE_URL}/api/check-phone`, {
         params: { Phonenumber: formattedPhonenumber },
         headers: { 'Content-Type': 'application/json' },
       });
@@ -150,7 +151,7 @@ interface LookupMap {
 
   const fetchProvinces = async () => {
     try {
-      const response = await fetch('https://psgc.gitlab.io/api/provinces/');
+      const response = await fetch(`https://psgc.gitlab.io/api/provinces/`);
       const data: Province[] = await response.json();
       setProvinces(data.sort((a, b) => a.name.localeCompare(b.name)));
   

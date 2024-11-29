@@ -4,24 +4,51 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comment;
+use App\Models\Product;
+use App\Models\Notification;
 use App\Models\Reply;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class CommentController extends Controller
 {
+
+
     public function store(Request $request)
     {
+        // Validate incoming request
         $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'userId' => 'required|exists:users,id',
-            'text' => 'required|string|max:255',
+            'product_id' => 'required|exists:products,id',  // Ensure product exists
+            'userId' => 'required|exists:users,id',          // Ensure user exists
+            'text' => 'required|string|max:255',              // Ensure text is a valid string
         ]);
-
+    
+        // Create the comment
         $comment = Comment::create($request->all());
-
-        return response()->json($comment, 201);
+    
+        // Fetch the product associated with the comment to get the 'user_id'
+        $product = Product::find($request->product_id);
+    
+        // Ensure the user who created the product is different from the user posting the comment
+        if ($product->user_id !== (int)$request->userId) {  // Cast to integer if needed
+            // Create a notification for the user if they are different
+            Notification::create([
+                'userId' => $request->userId,  // The user ID for whom the notification is for
+                'type' => 'comment',           // Type of notification
+                'isRead' => false,             // Default value for 'isRead'
+                'from' => $request->product_id, // The product related to the notification
+                'for' => $product->user_id,    // The user who created the product, which is the "for" field
+                'resource' => $request->text,  // The resource type for the notification
+            ]);
+        }
+    
+        return response()->json($comment, 201);  // Return the created comment
     }
+    
+
+
+
+
 
     public function index($productId)
     {
@@ -33,6 +60,8 @@ class CommentController extends Controller
     }
 
 
+
+    
     public function notifComments(Request $request)
 {
     // Retrieve the list of product IDs from the query parameter
@@ -61,17 +90,6 @@ class CommentController extends Controller
     return response()->json($comments);
 }
 
-public function markAsRead($id)
-{
-    $comment = Comment::find($id);
-    Log::info('Marking comment as read:', ['comment' => $comment]);
-    if ($comment) {
-        $comment->isRead = true;
-        $comment->save();
-        return response()->json(['success' => true, 'message' => 'Comment marked as read']);
-    }
-    return response()->json(['success' => false, 'message' => 'Comment not found'], 404);
-}
 
 public function notifyreply($userId)
 {
@@ -108,18 +126,6 @@ public function notifycommentreply(Request $request)
 }
 
 
-public function markreplyAsRead($id)
-{
-    $reply = Reply::find($id);
-    Log::info('Marking comment as read:', ['reply' => $reply]);
-    if ($reply) {
-        $reply->isRead = true;
-        $reply->save();
-        return response()->json(['success' => true, 'message' => 'Comment marked as read']);
-    }
-    return response()->json(['success' => false, 'message' => 'Comment not found'], 404);
-}
-
     public function destroy($id)
     {
         $comment = Comment::findOrFail($id);
@@ -137,64 +143,117 @@ public function markreplyAsRead($id)
         return response()->json(null, 204);
     }
 
-    //reply for comments
     public function storereply(Request $request)
     {
+        // Validate the incoming request data
         $validatedData = $request->validate([
-            'comment_id' => 'required|exists:comments,id',
-            'user_id' => 'required|exists:users,id',
-            'reply' => 'required|string',
+            'comment_id' => 'required|exists:comments,id',  // Ensure the comment exists
+            'user_id' => 'required|exists:users,id',        // Ensure the user exists
+            'reply' => 'required|string',                    // Ensure the reply text is valid
         ]);
-
+    
+        // Create the reply
         $reply = Reply::create([
             'comment_id' => $validatedData['comment_id'],
             'user_id' => $validatedData['user_id'],
             'reply' => $validatedData['reply'],
         ]);
         
-        // Fetch the reply with only specific user data (firstname, lastname)
+        // Get the associated comment to retrieve the user_id and product_id
+        $comment = Comment::find($validatedData['comment_id']);
+        
+        // Get the user_id from the associated comment (this is the user the notification is for)
+        $user_id_for_notification = $comment->userId; // Assuming user_id is available in the comments table
+    
+        // Check if the user who replied is the same as the user who commented
+        if ($user_id_for_notification !== (int)$validatedData['user_id']) {
+            // Get the product_id from the comment (this will be used as 'from' in the notification)
+            $product_id = $comment->product_id;
+    
+            // Create a notification for the user
+            Notification::create([
+                'userId' => $validatedData['user_id'],      // The user who made the reply
+                'type' => 'reply',                          // Type of notification
+                'isRead' => false,                          // Default value for 'isRead'
+                'from' => $product_id,                      // The product associated with the comment
+                'for' => $user_id_for_notification,         // The user who is the "for" field (the comment's user)
+                'resource' => $validatedData['reply'],      // The resource type for the notification
+            ]);
+        }
+        
+        // Fetch the reply with specific user data (firstname, lastname)
         $replyWithUser = Reply::with([
             'user:id,Firstname,Lastname',
-            'comment.user' => function ($query) { // Load only specific fields for the comment's user
-                    $query->select('id', 'Firstname', 'Lastname'); // Ensure to include the id field to maintain relationship
-                }
-            ])
-            ->find($reply->id);
-        
-        return response()->json($replyWithUser, 201); // Respond with created reply including user data
-        
-    }
-
-    public function store_reply(Request $request)
-    {
-        $validatedData = $request->validate([
-            'comment_id' => 'required|exists:comments,id',
-            'replies_to' => 'required|exists:replies,id',
-            'user_id' => 'required|exists:users,id',
-            'reply' => 'required|string',
-        ]);
-
-     Log::info('Validated Data:', $validatedData); // Log the validated data
-
-        $reply = Reply::create([
-            'comment_id' => $validatedData['comment_id'],
-            'replies_to' => $validatedData['replies_to'],
-            'user_id' => $validatedData['user_id'],
-            'reply' => $validatedData['reply'],
-        ]);
-        
-        // Fetch the reply with only specific user data (firstname, lastname)
-        $replyWithUser = Reply::with([
-        'user:id,Firstname,Lastname',
-        'repliesTo' => function ($query) 
-                { $query->with('user:id,Firstname,Lastname'); 
+            'comment.user' => function ($query) {
+                $query->select('id', 'Firstname', 'Lastname');  // Only select necessary fields for comment user
             }
         ])
         ->find($reply->id);
-        
-        return response()->json($replyWithUser, 201); // Respond with created reply including user data
-        
+    
+        // Return the created reply with the user data
+        return response()->json($replyWithUser, 201);
     }
+    
+
+
+
+    public function store_reply(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'comment_id' => 'required|exists:comments,id',
+                'replies_to' => 'required|exists:replies,id',
+                'user_id' => 'required|exists:users,id',
+                'reply' => 'required|string',
+            ]);
+    
+            Log::info('Validated Data:', $validatedData); // Log the validated data
+    
+            $reply = Reply::create([
+                'comment_id' => $validatedData['comment_id'],
+                'replies_to' => $validatedData['replies_to'],
+                'user_id' => $validatedData['user_id'],
+                'reply' => $validatedData['reply'],
+            ]);
+            
+            // Fetch the reply with specific user data (firstname, lastname)
+            $replyWithUser = Reply::with([
+                'user:id,Firstname,Lastname',
+                'replies' => function ($query) {
+                    $query->with('user:id,Firstname,Lastname');
+                }
+            ])
+            ->find($reply->id);
+    
+            // Fetch the replies_to relation to get the user_id for the notification's 'for' field
+            $repliedToUser = Reply::find($validatedData['replies_to'])->user_id;
+            
+            // Get the associated comment to retrieve the user_id and product_id
+            $comment = Comment::find($validatedData['comment_id']);
+            $product_id = $comment->product_id;
+    
+            // Skip notification if the replying user is the same as the user being replied to
+            if ($repliedToUser !== (int)$validatedData['user_id']) {
+                // Create the notification
+                Notification::create([
+                    'userId' => $validatedData['user_id'],  // The user who made the reply
+                    'type' => 'reply_to',                   // Type of notification
+                    'isRead' => false,                      // Default value for 'isRead'
+                    'from' => $product_id,                  // The product associated with the comment
+                    'for' => $repliedToUser,                // The user who is the "for" field (the user being replied to)
+                    'resource' => $validatedData['reply'],  // The resource type for the notification (the reply text)
+                ]);
+            }
+    
+            return response()->json($replyWithUser, 201); // Respond with created reply including user data
+        } catch (\Exception $e) {
+            Log::error('Error in store_reply method: ' . $e->getMessage());
+            return response()->json(['error' => 'An error occurred while submitting the reply.'], 500);
+        }
+    }
+    
+
+    
 
             public function fetchRepliesByIds($commentIDs)
         {

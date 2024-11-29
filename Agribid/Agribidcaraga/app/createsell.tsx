@@ -14,10 +14,15 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
+import { icons } from "../constants";
 import * as ImageManipulator from 'expo-image-manipulator';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Picker } from '@react-native-picker/picker';
 import { useAlert } from '../components/AlertContext';
+import ProtectedRoute from '../components/ProtectedRoute';
+import BASE_URL from '../components/ApiConfig';
+import SideModal from '../components/sidemodal';
+import  useGlow  from '../components/GlowingImage';
 
 
 interface Barangay {
@@ -73,13 +78,32 @@ const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ visible, onChooseFr
 const Createsell = () => {
   const navigation = useNavigation();
   const [category, setCategory] = useState("");
-  const categories = ["Fruits", "LiveStock & Poultry", "Fisheries", "Vegetable", "Crops"];
+  const [commodities, setCommodities] = useState("");
+  const categories = [
+    "Imported Commercial Rice",
+    "Local Commercial Rice",
+    "Corn ",
+    "Livestock & Poultry Products",
+    "Fisheries",
+    "Lowland Vegetables",
+    "Highland Vegetables",
+    "Fruits",
+    "Species",
+    "Rootcrops",
+  ];
+  const [srpData, setSrpData] = useState<{ commodities: Array<any> } | null>(null);
+ 
+  const [filteredCommodities, setFilteredCommodities] = useState<string[]>([]);
+  const [selectedCommodity, setSelectedCommodity] = useState<any | null>(null);
+  const priceRange = selectedCommodity ? selectedCommodity.price_range : null;
+  const { setGlow } = useGlow();
+
+  const [error, setError] = useState('');
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("");
   const [Units, setUnits] = useState('kg');
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [imageUri, setImageUri] = useState(null);
   const units = ["kg", "Pcs", "Trays", "Sacks"];
   const [currentUser, setCurrentUser] = useState<User | null>(null); // Assuming the initial state is null
   const [price, setPrice] = useState<string>("");
@@ -89,11 +113,14 @@ const Createsell = () => {
   const [errors, setErrors] = useState({
     image: '',
     title: '',
+    commodities: '',
     quantity: '',
     units: '',
     price: '',
     locate: '',
   });
+
+  const [issideModalVisible, setIssideModalVisible] = useState(false);
 
     const [forceRender, setForceRender] = useState(false); 
     const [Barangays, setBarangays] = useState<Barangay[]>([]);
@@ -185,13 +212,82 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   }
 }, [currentUser, barangayLookup]);
 
- const regex = /^\d{0,7}(\.\d{0,2})?$/;
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPrice, setMaxPrice] = useState(0);
 
-  const handleChangeText = (text: string) => {
+  // Parse price range and set min/max limits
+  useEffect(() => {
+    if (priceRange) {
+      console.log('Price Range:', priceRange);
+      const priceParts = priceRange.split('-');
+      
+      if (priceParts.length === 2) {
+        // If range like 35.00-50.00
+        const min = parseFloat(priceParts[0]);
+        const max = parseFloat(priceParts[1]);
+      
+        setMinPrice(parseFloat((min * 0.7).toFixed(2))); // 30% less than min, rounded to 2 decimals
+        setMaxPrice(parseFloat(max.toFixed(2))); // Max value rounded to 2 decimals
+      } else if (priceParts.length === 1) {
+        // If single value like 100.00
+        const min = parseFloat(priceParts[0]);
+        const max = parseFloat(priceParts[0]);
+      
+        setMinPrice(parseFloat((min * 0.5).toFixed(2))); // 50% less than the value, rounded to 2 decimals
+        setMaxPrice(parseFloat(max.toFixed(2))); // Max value rounded to 2 decimals
+      }      
+    }
+  }, [priceRange]);
+ 
+  const regex = /^\d{0,7}(\.\d{0,2})?$/; // Regex for valid price format
+
+ const handleChangeText = (text: string) => {
+    // Only proceed if the text is a valid number format
     if (regex.test(text)) {
-      setPrice(text);
+      const numericValue = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1'); // Clean input
+      
+      const input = parseFloat(numericValue);
+  
+      // Prevent input if it exceeds the min or max price
+      if (maxPrice === 0 || isNaN(input) || input <= maxPrice) {
+        setPrice(numericValue); // Update the price if within the allowed range
+        validatePrice(numericValue); // Validate after updating the price
+      } else {
+        // Optional: set an error message or handle invalid input
+        setError(`Price must be between ${minPrice} and ${maxPrice || 'no upper limit'}.`);
+      }
+    } else if (text === '') {
+      // Allow clearing the input
+      setPrice('');
+      setError('');
     }
   };
+
+
+
+  // const handleChangeText = (text: string) => {
+  //   // Only proceed if the text is a valid number format
+  //   if (regex.test(text)) {
+  //     const numericValue = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1'); // Remove non-numeric except decimal
+  //     setPrice(numericValue);
+  //     validatePrice(numericValue);
+  //   }
+  // };
+
+  const validatePrice = (inputPrice) => {
+    const input = parseFloat(inputPrice);
+    if (inputPrice && !isNaN(input)) {
+      if (input < minPrice || (maxPrice && input > maxPrice)) {
+        setError(`Price must be between ${minPrice} and ${maxPrice || 'no upper limit'}.`);
+      } else {
+        setError('');
+      }
+    } else {
+      setError('');
+    }
+  };
+
+
   const handleChangequantity = (text: string) => {
     if (regex.test(text)) {
       setQuantity(text);
@@ -248,7 +344,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
     try {
       const manipulatedImage = await ImageManipulator.manipulateAsync(
         uri,
-        [{ resize: { width: 800, height: 800 } }],
+        [{ resize: { width: 900, height: 1000 } }],
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
       );
       return manipulatedImage.uri;
@@ -259,9 +355,10 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   };
   
   const validateForm = () => {
-    const newErrors = { image: '', title: '', quantity: '', units: '', price: '', locate: '' };
+    const newErrors = { image: '', title: '',commodities: '' , quantity: '', units: '', price: '', locate: '' };
     if (!image) newErrors.image = 'Image is required';
     if (!category) newErrors.title = 'Category is required';
+    if (!commodities) newErrors.commodities = 'Commodities is required';
     if (!quantity) newErrors.quantity = 'Quantity is required';
     if (!Units) newErrors.units = 'Units is required';
     if (!price) newErrors.price = 'Price is required';
@@ -272,6 +369,17 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   const createProduct = async () => {
     const newErrors = validateForm();
     setErrors(newErrors);
+
+    // Validate price range
+  if (parseFloat(price) < minPrice) {
+    Alert.alert("Error", `Price must not be less than ${minPrice.toFixed(2)}.`);
+    setGlow(true);
+    return; // Stop execution if price is invalid
+  } else if (maxPrice !== 0 && parseFloat(price) > maxPrice) {
+    Alert.alert("Error", `Price must not exceed ${maxPrice.toFixed(2)}.`);
+    setGlow(true);
+    return; // Stop execution if price is invalid
+  }
   
     if (Object.values(newErrors).every((error) => !error)) {
       try {
@@ -318,6 +426,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   
         // Append other form data
         formData.append('title', title);
+        formData.append('commodity', commodities);
         formData.append('description', description || title);
         formData.append('quantity', quantity);
         formData.append('unit', Units);
@@ -328,18 +437,21 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
         console.log('FormData:', JSON.stringify(formData)); // Log FormData for debugging
   
         // Make the API call to store the product
-        const response = await axios.post("http://192.168.31.160:8000/api/store", formData, {
+        const response = await axios.post(`${BASE_URL}/api/store`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${token}`,
           },
           timeout: 10000,
         });
-
-        showAlert('Produdct Posted successfully!', 3000);
+        
+        if (response.status === 201) {
+          showAlert('Product Posted successfully!', 3000, 'green');
+            // Handle successful response
+            navigation.goBack();
+        }
   
-        // Handle successful response
-        navigation.goBack();
+      
       } catch (error) {
         if (axios.isAxiosError(error)) {
           // Axios-specific error handling
@@ -354,7 +466,64 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
     }
   };
 
+  // useEffect(() => {
+  //   fetchSRP();
+  // }, []);
+
+  const toggleModal = () => {
+    setIssideModalVisible(!issideModalVisible);
+  };
+
+
+  const fetchSRP = async (category: string) => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) {
+        navigation.navigate("(auth)/login");
+        return;
+      }
+      setSrpData(null); // Reset the SRP data
+      setFilteredCommodities([]); // Reset the filtered commodities list
+  
+      const response = await axios.get(
+        `${BASE_URL}/api/SRP/${category}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // console.log("SRP Data:", response.data);
+  
+      if (Array.isArray(response.data.commodities)) {
+        // Set the full SRP data
+        setSrpData(response.data);
+  
+        // Extract only the commodity names
+        const commodityNames = response.data.commodities.map(
+          (item) => item.commodity
+        );
+        
+        // Update the filtered commodities list
+        setFilteredCommodities(commodityNames);
+      } else {
+        console.error("Commodities data is not an array:", response.data.commodities);
+        setSrpData([]);
+        setFilteredCommodities([]); // Set to empty array if data is invalid
+      }
+    } catch (error) {
+      console.error("Error fetching SRP:", error);
+      setFilteredCommodities([]); // Set to empty array in case of error
+    }
+  };
+  
+  
+  
+  
+
   return (
+    <ProtectedRoute>
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollViewContent}>
         <TouchableOpacity
@@ -386,23 +555,89 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
         )}
 
         <View style={styles.formWrapper}>
-        <Text style={styles.label}>Category*</Text>
-        <View style={[styles.pickerContainer, errors.title ? styles.errorInput : {}]}>
-    <Picker
-        selectedValue={category}
-        onValueChange={itemValue => {
-            setCategory(itemValue);
-            setTitle(itemValue);
-            setErrors(prevErrors => ({ ...prevErrors, title: '' }));
-        }}
-        style={[styles.picker, { borderWidth: 1, borderColor: '#bdc8d6', borderRadius: 5 }]} // Add border styles here
-    >
-        <Picker.Item label="Select a category" value="" />
-        {categories.map((category, index) => (
-            <Picker.Item key={index} label={category} value={category} />
-        ))}
-    </Picker>
+        {/* Category Picker */}
+          <Text style={styles.label}>Category*</Text>
+      <View
+        style={[
+          styles.pickerContainer,
+          errors.title ? styles.errorInput : {},
+        ]}
+      >
+        <Picker
+          selectedValue={category}
+          onValueChange={(itemValue) => {
+            console.log("Selected Category:", itemValue);
+            setCategory(itemValue); // Update category state
+            setTitle(itemValue); // Update title state
+            setCommodities(""); // Reset commodity selection
+            fetchSRP(itemValue);
+            setErrors((prevErrors) => ({ ...prevErrors, title: "" }));
+          }}
+          style={[
+            styles.picker,
+            { borderWidth: 1, borderColor: "#bdc8d6", borderRadius: 5 },
+          ]}
+        >
+          <Picker.Item label="Select a Category" value="" />
+          {categories.map((cat, index) => (
+            <Picker.Item key={index} label={cat} value={cat} />
+          ))}
+        </Picker>
+      </View>
+
+      {/* Commodity Picker */}
+      {category && (
+      <>
+<Text style={styles.label}>Commodity*</Text>
+<View
+  style={[styles.pickerContainer, errors.commodities ? styles.errorInput : {}]}
+>
+  <Picker
+    selectedValue={commodities}
+    onValueChange={(itemValue) => {
+      console.log("Selected Commodity:", itemValue);
+
+      // Update selected commodity in state
+      setCommodities(itemValue); // Set the selected commodity
+
+      // Clear error message for the commodity field
+      setErrors((prevErrors) => ({
+        ...prevErrors,
+        commodities: "",
+      }));
+
+      // Ensure srpData is available and not empty
+      if (srpData && Array.isArray(srpData.commodities)) {
+        const selectedCommodityData = srpData.commodities.find(
+          (item) => item.commodity === itemValue
+        );
+        // console.log("SRP Data after update:", srpData);
+
+        if (selectedCommodityData) {
+          setSelectedCommodity(selectedCommodityData); // Set the selected commodity for further use
+        }else {
+          console.error("Selected commodity not found in srpData.");
+        }
+      } else {
+        console.error("SRP data or commodities is not available.");
+      }
+    }}
+    style={[styles.picker, { borderWidth: 1, borderColor: "#bdc8d6", borderRadius: 5 }]}
+  >
+    <Picker.Item label="Select a Commodity" value="" />
+    {filteredCommodities.length > 0 ? (
+      filteredCommodities.map((commodity, index) => (
+        <Picker.Item key={index} label={commodity} value={commodity} />
+      ))
+    ) : (
+      <Picker.Item label="No commodities available" value="" />
+    )}
+  </Picker>
 </View>
+
+        </>
+      )}
+
 
           <Text style={styles.label}>Description Optional</Text>
           <TextInput
@@ -416,7 +651,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
           <Text style={styles.label}>Quantity*</Text>
           <View style={[styles.quantityContainer, errors.quantity ? styles.errorInput : {}]}>
           <TextInput
-        style={[styles.quantityinput, errors.quantity ? styles.errorInput : {}]}
+        style={[styles.quantityinput]}
         value={quantity}
         placeholder="Quantity"     
         onChangeText={(text) => {
@@ -433,7 +668,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
             setUnits(itemValue); // If setSelectedUnit is also needed
           }}
           style={[styles.pickerDropdown, { borderWidth: 1, borderColor: '#bdc8d6', borderRadius: 5 }
-            , errors.units ? styles.errorInput : {}
+            
           ]}
         >
           <Picker.Item label="Select a unit" value="" />
@@ -446,21 +681,34 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
           ))}
         </Picker>
           </View>
-      
+          <TouchableOpacity style={styles.pullString} onPress={toggleModal}>
+            
+            <Image 
+              source={icons.srptag2} 
+              style={{ width: 90, height: 60, tintColor: 'green', zIndex: 1 }}
+              />
+        <View style={styles.pullStringHandle} />
+      </TouchableOpacity>
+
+      <SideModal
+  isVisible={issideModalVisible}
+  onClose={() => setIssideModalVisible(false)}
+  srpData={selectedCommodity ? [selectedCommodity] : []} // Pass selectedCommodity as an array
+/>
+
+
+
 
           <Text style={styles.label}>Price*</Text>
           <TextInput
-              style={[styles.input, errors.price ? styles.errorInput : {}]}
-              value={price}
-              onChangeText={(text) => {
-                // Allow only numeric values
-                const numericValue = text.replace(/[^0-9]/g, '');
-                handleChangeText(numericValue);
-              }}
-              placeholder="Price"
-              keyboardType="numeric" // Ensure only numeric input
-              maxLength={6} // Limit to 6 digits
-            />
+            style={[styles.input, errors.price ? styles.errorInput : {}]}
+            value={price}
+            onChangeText={handleChangeText}
+            placeholder="Price"
+            keyboardType="decimal-pad" // Use decimal pad to input decimals
+            maxLength={8} // Limit to 6 characters (can be adjusted based on your needs)
+          />
+          {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
 
 
       <Text style={styles.label}>Location*</Text>
@@ -484,6 +732,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
         </View>
       </ScrollView>
     </SafeAreaView>
+     </ProtectedRoute>
   );
 };
 
@@ -496,7 +745,8 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
-    margin: 20,
+    marginTop: 20,
+    margin: 5,
     paddingBottom: 30,
   },
   pickerWrapper: {
@@ -506,8 +756,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   picker: {
-    height: 50,
     width: '100%',
+    height: 55,
+    fontSize: 25,
+    overflow: 'visible', // Ensures text stays within bounds and is visible if it overflows
   },
   pickerContainer: {
     width: '100%',
@@ -571,6 +823,7 @@ backButtonText: {
     borderRadius: 8,
     padding: 10,
     marginBottom: 16,
+    height: 55,
   },
   quantityContainer: {
     flexDirection: 'row',
@@ -586,7 +839,7 @@ backButtonText: {
     flex: 3,
     borderWidth: 1,
     borderColor: '#ccc',
-    height: 60,
+    height: 60.8,
     borderLeftWidth: 0,
   },
   pickerDropdown: {
@@ -667,5 +920,24 @@ backButtonText: {
   },
   buttonRed: {
     // backgroundColor: '#FF6347',
+  },
+  pullString: {
+    position: 'absolute',
+    top: '65%',
+    right: -15,
+    width: 70,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // backgroundColor: '#ccc',
+    borderTopLeftRadius: 15,
+    borderBottomLeftRadius: 15,
+    zIndex: 9999,
+  },
+  pullStringHandle: {
+    width: 10,
+    height: 30,
+    // backgroundColor: '#888',
+    borderRadius: 5,
   },
 });

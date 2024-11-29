@@ -7,6 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { icons } from "../../constants";
 import { useRouter } from 'expo-router';
+import ImageLoader  from '../../components/imageprocessor';
+import ProductList from '../../components/ProductList';
+import BASE_URL from '../../components/ApiConfig';
 
 const screenWidth = Dimensions.get('window').width;
 const screenHeight = Dimensions.get('window').height;
@@ -41,12 +44,15 @@ interface ProductItemProps {
 const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }: ProductItemProps) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // const imageUri = item.image; 
+  // console.log('ProductItem rendering:', imageUri);
+  // console.log('ProductItem rendering:', item.image);
 
-  // console.log('ProductItem rendering:', item);
+
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/product/images/${item.image}`;
+      const uri = item?.image;;
       const cachedUri = await cacheImage(uri);
       setImageUri(cachedUri);
       setLoading(false);
@@ -59,9 +65,14 @@ const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }: Produ
     <TouchableOpacity  onPress={() => handleViewDetails(item)}>
       <View style={styles.productItem}>
         {loading ? (
-          <Text>Loading...</Text>
+           <Image 
+           source={icons.LoadingAgribid} 
+           style={styles.loadingicon}
+           resizeMode="contain" // Ensure the image fits within the circular container
+         /> 
         ) : (
-          imageUri ? <Image source={{ uri: imageUri }} style={styles.productImage} /> : null
+          // console.log('ProductItem rendering:', imageUri),
+          imageUri ? <ImageLoader imageUri={imageUri} style={styles.productImage} /> : null
         )}
         <View style={styles.productDetails}>
           <Text style={styles.productTitle}>{item.title}</Text>
@@ -91,11 +102,12 @@ interface RenderProductMessagesProps {
 const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCount }: RenderProductMessagesProps) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // const imageUri = item.image; 
   // console.log('RenderProductMessages rendering:', item);
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/product/images/${item.image}`;
+      const uri = item?.image;;
       const cachedUri = await cacheImage(uri);
       setImageUri(cachedUri);
       setLoading(false);
@@ -108,9 +120,13 @@ const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCoun
     <TouchableOpacity onPress={() => handleViewMessage(item.id)}>
       <View style={styles.productItem}>
         {loading ? (
-          <Text>Loading...</Text>
+          <Image 
+            source={icons.LoadingAgribid} 
+            style={styles.loadingicon}
+            resizeMode="contain" // Ensure the image fits within the circular container
+          /> 
         ) : (
-          imageUri ? <Image source={{ uri: imageUri }} style={styles.productImage} /> : null
+          imageUri ? <ImageLoader imageUri={imageUri} style={styles.productImage} /> : null
         )}
         <View style={styles.productDetails}>
           <Text style={styles.productTitle}>{item.title}</Text>
@@ -140,44 +156,33 @@ const Recents = () => {
     locate: string;
     created_at: string;
   }
-  interface ProductMessage {
-    id: string;
-    image: string;
-    title: string;
+  interface Message {
+    isRead: number;
+    id: number;
+    sendId: string;
+    receiveId: string;
+    product: {
+      image: string;
+    };
+    counterpart: {
+      id: string
+      Firstname: string;
+      Lastname: string;
+    };
+    message: string;
+    currentuserId: string;
     created_at: string;
   }
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [messages, setMessages] = useState<ProductMessage[]>([]);
-  const [messageID, setMessageID] = useState([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [messageList, setMessageList] = useState<{ [key: number]: any[] }>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRefreshingMessages, setIsRefreshingMessages] = useState(false);
-  const [sessionCounts, setSessionCounts] = useState<{ [key: number]: number }>({});
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation(); 
   const [modalVisible, setModalVisible] = useState(false);
-
-  interface Message {
-    product_id: string;
-    sessions: string;
-    receiver_id: string;
-    sender_id: string;
-    sender: {
-      id: number;
-      firstname: string;
-      lastname: string;
-      Address: string;
-      Phonenumber: string;
-      created_at: string;
-      updated_at: string;
-    };
-    text: string;
-    created_at: string;
-    updated_at: string;
-  }
   
-  const [selectedMessages, setSelectedMessages] = useState<Message[]>([]);
   const isFocused = useIsFocused();
   const router = useRouter();
 
@@ -187,7 +192,7 @@ const Recents = () => {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
 
-      const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/user/products`, {
+      const response = await axios.get(`${BASE_URL}/api/user/products`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -209,19 +214,52 @@ const Recents = () => {
         console.error('No auth token found');
         return null; // Return null if no token
       }
-
-      const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/user/productmessage', {
+  
+      const response = await axios.get(`${BASE_URL}/api/user/productmessage`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-
-      const messageIDs = response.data.map((message: { id: number }) => message.id);
-      setMessages(response.data);
-      // console.log('User messages:', response.data);
-      // Save messageIDs to AsyncStorage
-      await AsyncStorage.setItem('messageIDs', JSON.stringify(messageIDs));
-      return messageIDs; // Return the message IDs
+      const messageData = response.data.data; // Assuming the main data is in `data` field
+      // console.log('User messages:', JSON.stringify(response.data, null, 2));
+  
+      // Sort the message data
+      const sortedData = messageData.map((productData: any) => {
+        // Sort messages based on isRead (unread messages first), then created_at (latest first)
+        const sortedMessages = productData.messages.sort((a: { isRead: number; created_at: string | number | Date; }, b: { isRead: number; created_at: string | number | Date; }) => {
+          // If unread messages exist, put those at the top
+          if (a.isRead === 0 && b.isRead === 1) return -1; // a comes before b
+          if (a.isRead === 1 && b.isRead === 0) return 1; // b comes before a
+          
+          // Otherwise, sort by created_at for both read and unread messages (latest first)
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+  
+        // Return the product with sorted messages
+        return {
+          ...productData,
+          messages: sortedMessages,
+        };
+      });
+  
+      // Sort the products based on whether they have messages, unread ones first, then latest messages
+      const finalSortedProducts = sortedData.sort((a: { messages: any[]; }, b: { messages: any[]; }) => {
+        const hasUnreadA = a.messages.some(msg => msg.isRead === 0);
+        const hasUnreadB = b.messages.some(msg => msg.isRead === 0);
+  
+        // If one has unread messages, it should come first
+        if (hasUnreadA && !hasUnreadB) return -1;
+        if (!hasUnreadA && hasUnreadB) return 1;
+  
+        // If both or neither have unread messages, sort by latest created_at
+        return new Date(b.messages[0]?.created_at).getTime() - new Date(a.messages[0]?.created_at).getTime();
+      });
+  
+      // console.log('Sorted User messages:', JSON.stringify(finalSortedProducts, null, 2));
+  
+      // Optionally, save sorted data to AsyncStorage
+      await AsyncStorage.setItem('userMessages', JSON.stringify(finalSortedProducts));
+  
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error('Error fetching user messages:', error.response ? error.response.data : error.message);
@@ -235,235 +273,108 @@ const Recents = () => {
       return null; // Return null in case of error
     }
   };
-
-  // message function start here
-  // function for message list
-
-  const handleViewMessage = (productId: number) => {
-    if (!messageList || typeof messageList !== 'object') {
-      console.error('messageList is not available or not an object.');
-      return;
-    }
-
-    const filteredMessages = messageList[productId];
-
-    if (!filteredMessages) {
-      setSelectedMessages([]);  // Ensure this is set even if no messages are found
-      setModalVisible(true);    // Open the modal even if no messages found
-      return;
-    }
-    
-    const sessionMessages = Object.values(filteredMessages);
-    const flattenedMessages = sessionMessages.flat() as Message[]; // Flatten the array to handle multiple sessions
-    setSelectedMessages(flattenedMessages);
-    setModalVisible(true);  // Open the modal
-  };
-
-  const normalizeKeys = (obj: { [key: string]: any }) => {
-    const normalizedObj: { [key: string]: any } = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        normalizedObj[key.toLowerCase()] = obj[key];
-      }
-    }
-    return normalizedObj;
-  };
-
-  const formatTime = (datetime: string | Date) => {
-    const date = new Date(datetime);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
-
-  interface MessageItem {
-    first: {
-      id: any;
-      sender: {
-        firstname: string;
-        lastname: string;
-      };
-    };
-    latest: {
-      text: string;
-      created_at: string;
-    };
-  }
-
-  const renderMessage = ({ item }: { item: MessageItem }) => {
-    if (!item || !item.first || !item.first.sender || !item.latest) {
-      console.error('Invalid message item:', item);
-      return null;
-    }
   
-    const firstMessage = item.first;
-    const latestMessage = item.latest;
-    const sender = normalizeKeys(firstMessage.sender);
-    const displayName = `${sender.firstname || 'Unknown'} ${sender.lastname || ''}`.trim();
-  
-    // Function to check if text is an image URL
-    const isImageUrl = (text) => {
-      if (!text) {
-        return false; // Return false if text is null or undefined
-      }
-      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
-      return imageExtensions.some(ext => text.toLowerCase().endsWith(ext));
-    };
-  
-    return (
-      <TouchableOpacity onPress={() => handlemessagereceive(firstMessage)}>
-        <View style={styles.messageContainer}>
-          <Text style={styles.senderName}>{displayName || 'Unknown'}</Text>
-          <View style={styles.messageRow}>
-            <Text style={styles.messageText} numberOfLines={1}>
-              {isImageUrl(latestMessage.text) ? 'Image' : (latestMessage.text || 'No message content')}
-            </Text>
-            <Text style={styles.messageTime}>
-              {latestMessage.created_at ? formatTime(latestMessage.created_at) : 'No message content'}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
 
-  const loadMessageIDs = async () => {
+  const loadMessage = async () => {
     try {
-      const savedMessageIDs = await AsyncStorage.getItem('messageIDs');
+      const savedMessageIDs = await AsyncStorage.getItem('userMessages');
       if (savedMessageIDs) {
-        const messageIDs = JSON.parse(savedMessageIDs);
-        setMessageID(messageIDs);
-        return messageIDs;
+        const message = JSON.parse(savedMessageIDs);
+        // console.log('Sorted User messages:', JSON.stringify(message, null, 2));
+        setMessages(message); // Set the saved data to the state
+
+      } else {
+        // If no saved data, fetch messages
+        const fetchedMessages = await fetchMessages();
+        if (fetchedMessages) {
+          // Save fetched messages to AsyncStorage
+          await AsyncStorage.setItem('userMessages', JSON.stringify(fetchedMessages));
+  
+          // Set the fetched data to the state
+          setMessages(fetchedMessages);
+  
+          return fetchedMessages;
+        }
       }
     } catch (error) {
       console.error('Error loading Message IDs from AsyncStorage:', error);
     }
-    return await fetchMessages(); // Fallback to fetching if no saved data
   };
 
-  const fetchMessagelist = async () => {
-    setLoading(true); // Start loading
-    const productIds = await loadMessageIDs(); // Await loaded or fetched message IDs
 
-    if (!productIds || productIds.length === 0) {
-      console.log('Fetched productIds is empty, skipping fetchMessagelist');
-      setLoading(false); // End loading
-      return;
-    }
+// Function to handle message press
+const handleMessagePress = async (item: { sendId: any; currentuserId: any; product: { id: any; }; receiveId: any; sessions: any; id: any; isRead: number; }) => {
+  // console.log('Message clicked:', item);
 
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) {
-        console.error('No auth token found');
-        setLoading(false); // End loading
-        return;
-      }
+  const token = await AsyncStorage.getItem('authToken');
+  if (!token) {
+    console.error('No auth token found');
+    return;
+  }
 
-      const fetchMessagesForProduct = async (productId: number) => {
-        const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messageslist', {
-          params: { productId },
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 10000,
-        });
-
-        if (!response.data || response.data.length === 0) {
-          return [];
-        }
-
-        return response.data.map((session: any) => ({
-          productId: productId,
-          sessions: session.sessions,
-          first: session.first,
-          latest: session.latest,
-        }));
-      };
-
-      const allMessagesByProduct: { [key: number]: any[] } = {};
-      for (const productId of productIds) {
-        if (!productId) {
-          continue;
-        }
-        const messages = await fetchMessagesForProduct(productId);
-        if (messages.length) {
-          if (!allMessagesByProduct[productId]) {
-            allMessagesByProduct[productId] = [];
-          }
-          messages.forEach((message: any) => {
-            allMessagesByProduct[productId].push(message);
-          });
-        }
-      }
-
-      const sessionCounts = Object.keys(allMessagesByProduct).reduce((acc: { [key: number]: number }, productId: string) => {
-        const id = parseInt(productId, 10);
-        acc[id] = Object.keys(allMessagesByProduct[id]).length;
-        return acc;
-      }, {});
-      setSessionCounts(sessionCounts);
-      setMessageList(allMessagesByProduct);
-      await updateMessagesInStorage(productIds, allMessagesByProduct); // Ensure this awaits for completion
-      setLoading(false); // End loading
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      setLoading(false); // End loading
-      Alert.alert('Error', 'Could not fetch messages.');
-    }
-  };
-
-  const updateMessagesInStorage = async (productIds: number[], newMessages: { [key: number]: any[] }) => {
-    try {
-      const storageKey = `messages_${productIds.join('_')}`;
-      const existingMessages = await AsyncStorage.getItem(storageKey);
-      let currentMessages = existingMessages ? JSON.parse(existingMessages) : [];
-
-      // Ensure currentMessages is an array
-      if (!Array.isArray(currentMessages)) {
-        currentMessages = [];
-      }
-
-      const allNewMessages = Object.values(newMessages).flat();
-
-      // Create a map for current messages
-      const messageMap = new Map(currentMessages.map((msg: any) => [msg.id, msg]));
-
-      // Add new messages to the map
-      allNewMessages.forEach(msg => messageMap.set(msg.id, msg));
-
-      // Create a new array from the map values
-      const combinedMessages = Array.from(messageMap.values());
-
-      // Save updated messages to AsyncStorage
-      await AsyncStorage.setItem(storageKey, JSON.stringify(combinedMessages));
-
-      console.log('AsyncStorage updated with new messages.');
-    } catch (error) {
-      console.error('Failed to update AsyncStorage:', error);
-    }
-  };
-
-  const handlemessagereceive = (message: Message) => {
-    if (!message || !message.sender || !message.sender.id) {
-      console.error('First message data is missing or invalid:', message);
-      return;
-    }
-  
+  // Check if the current user is the sender
+  if (item.sendId === item.currentuserId) {
+    // If the user is the sender, navigate without marking as read
     const paramsToSend = {
-      productId: message.product_id,
-      senderId: message.sender.id,
-      receiverId: message.receiver_id,
-      sessions: message.sessions
+      productId: item.product.id,
+      senderId: item.receiveId,
+      receiverId: item.sendId,
+      sessions: item.sessions,
     };
-  
-    setModalVisible(false);
+
     router.push({
-      pathname: '/message/messagereceiver',
-      params: paramsToSend
+      pathname: '/message/messagereceiver',  // Navigate to sender's message page
+      params: paramsToSend,
     });
-  }; 
+    return; // Exit early
+  }
+
+  // If the current user is the receiver, mark the message as read first
+  try {
+    await axios.post(
+      `${BASE_URL}/api/message/${item.id}/mark-read`,
+      {}, // Empty object for POST body
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    // Mutate the 'isRead' value directly in the item object (Mark the message as read)
+    item.isRead = 1; // Mark the message as read (1 represents read)
+
+    // Update state to reflect the change in message read status
+    // setMessageList((prevState) =>
+    //   prevState.map((message) =>
+    //     message.id === item.id ? { ...message, isRead: 1 } : message
+    //   )
+    // );
+
+    // Now navigate to the receiver's message page
+    const paramsToSend = {
+      productId: item.product.id,
+      senderId: item.sendId,
+      receiverId: item.receiveId,
+      sessions: item.sessions,
+    };
+
+    router.push({
+      pathname: '/message/messagereceiver',  // Navigate to receiver's message page
+      params: paramsToSend,
+    });
+
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+  }
+};
+
+
+
 
   const handleViewDetails = (product: any) => {
-    console.log('Viewing product details:', product.id);
-    navigation.navigate('ProductDetails', { productId: product.id });
+    // console.log('Viewing product details:', product.id);
+    navigation.navigate('ProductDetails', { productId: product.id});
   };;
 
   const handleDelete = async (product: { id: number; image: string; title: string; description: string; price: string; locate: string; created_at: string; }) => {
@@ -484,7 +395,7 @@ const Recents = () => {
               if (!token) return;
 
               await axios.put(
-                `https://trusting-widely-goldfish.ngrok-free.app/api/products/${product.id}/live`,
+                `${BASE_URL}/api/products/${product.id}/live`,
                 { live: false },
                 {
                   headers: {
@@ -494,7 +405,7 @@ const Recents = () => {
                 }
               );
 
-              console.log('Product deleted', product.id);
+              // console.log('Product deleted', product.id);
               Alert.alert('Product is now deleted');
               fetchProducts(); // Refresh the product list
             } catch (error) {
@@ -528,7 +439,7 @@ const Recents = () => {
     if (currentTime - lastFetchMessageTime.current > messageDebounceDelay) {
       console.log('Fetching messages...');
       await fetchMessages();
-      await fetchMessagelist();
+      // await fetchMessagesForProduct();
       lastFetchMessageTime.current = currentTime;
     } else {
       console.log('Message fetch skipped to prevent 429');
@@ -538,6 +449,7 @@ const Recents = () => {
   const fetchData = async () => {
     await fetchProductsData();
     await fetchMessagesData();
+    await loadMessage();
   };
   
 
@@ -545,14 +457,10 @@ const Recents = () => {
     const executeFetch = async () => {
       if (isFocused) {
         setLoading(true);
-  
-        // Fetch data, but separate product and message fetching
         await fetchData();
-  
         setLoading(false);
       }
     };
-  
     executeFetch();
   }, [isFocused]);
   
@@ -574,6 +482,7 @@ const Recents = () => {
     if (currentTime - lastFetchMessageTime.current > messageDebounceDelay) {
       setIsRefreshingMessages(true);
       await fetchMessages();
+      await loadMessage();
       setIsRefreshingMessages(false);
       lastFetchMessageTime.current = currentTime;
     } else {
@@ -663,100 +572,8 @@ const Recents = () => {
           <Text style={styles.label}>Product Messages:</Text>
           {/* <Text style={styles.totalProducts}>item with message: {sessionCounts.le}</Text> */}
         </View>
-        <>
-            {loading ? (
-              <Text style={styles.loadingstate}>Loading...</Text> // Show a loading indicator or placeholder
-            ) : (
-              <FlatList
-                // data={sortedData}
-                data={messages}
-                renderItem={({ item }: { item: { id: number } }) => {
-                  const sessionCount = sessionCounts[item.id] || 0;
-                  return (
-                    <RenderProductMessages 
-                      item={item} 
-                      handleViewMessage={handleViewMessage} 
-                      sessionCount={sessionCount} // Pass the correct session count
-                    />
-                  );
-                }}
-                keyExtractor={(item) => item.id.toString()}
-                extraData={messages}
-                refreshControl={
-                  <RefreshControl refreshing={isRefreshingMessages} onRefresh={onRefreshMessages} />
-                }
-                ListEmptyComponent={
-                  <View style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: 20,
-                    }}>
-                    <Text style={{
-                        marginTop: 10,
-                        fontSize: 18,
-                        fontWeight: '600',
-                        color: '#444',
-                        textAlign: 'center',
-                      }}>
-                      No Product Messages Yet
-                    </Text>
-                    <Text style={{
-                        marginTop: 5,
-                        fontSize: 14,
-                        color: '#888',
-                        textAlign: 'center',
-                        paddingHorizontal: 15,
-                        lineHeight: 20,
-                      }}>
-                       Respond to Customer Messages Here.
-                    </Text>
-                  </View>
-                }
-              />
-            )}
-          </>
+        <ProductList products={messages} onMessagePress={handleMessagePress}/>
       </View>
-      <Modal
-  animationType="slide"
-  transparent={true}
-  visible={modalVisible}
-  onRequestClose={() => setModalVisible(false)}
->
-  <SafeAreaView style={styles.modalOverlay}>
-    <View style={styles.modalView}>
-       <View style={styles.messageheader}>
-        <Text style={styles.headerText}>
-          Your Product      
-            <Image 
-                    source={icons.contact} 
-                    style={styles.icon}
-                    resizeMode="contain" // Ensure the image fits within the circular container
-                    //show the message count you have created so far if there are none it is hidden
-                  /> </Text>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-        </View>
-
-      {loading ? (
-        <Text style={styles.loadingstate}>Loading...</Text>
-      ) : selectedMessages && selectedMessages.length === 0 ? (
-        <View style={styles.noMessageContainer}>
-          <Text style={styles.noMessageText}>No messages yet</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={selectedMessages}
-          keyExtractor={(item) => item.first.id.toString()}
-          renderItem={renderMessage}
-        />
-      )}
-    </View>
-  </SafeAreaView>
-</Modal>
     </View>
   );
 };
@@ -767,6 +584,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    // backgroundColor: '#B4CBB7',
   },
   transactionsContainer: {
     marginBottom: 20,
@@ -805,6 +623,12 @@ const styles = StyleSheet.create({
   icon: {
     width: 20,
     height: 20,
+  },
+  loadingicon: {
+    width: 80,
+    height: 80,
+    borderRadius: 5,
+    marginRight: 10,
   },
   poster: {
     flexDirection: 'row',

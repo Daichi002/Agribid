@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useAlert } from '../components/AlertContext';
 import { Picker } from '@react-native-picker/picker';
+import BASE_URL from '../components/ApiConfig';
 
 interface Product {
   id: string;
@@ -83,6 +84,7 @@ const UpdateProduct = () => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const navigation = useNavigation();
   const { productId } = useLocalSearchParams();
+  const [productID, setProductID] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const categories = ["Fruits", "LiveStock & Poultry", "Fisheries", "Vegetable", "Crops"];
   const units = ["kg", "Pcs", "Trays", "Sacks"];
@@ -199,7 +201,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
         console.error('No auth token found');
         return;
       }
-      const response = await axios.get(`http://192.168.31.160:8000/api/productdetails/${productId}`, {
+      const response = await axios.get(`${BASE_URL}/api/updateproductdetails/${productId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -357,7 +359,7 @@ if (image) {
       uri: image,
       type: 'image/jpeg',
       name: 'photo.jpg'
-    });
+    }as any);
   } catch (error) {
     console.error('Error fetching the image:', error);
     Alert.alert("Error", "Could not process the image. Please try again.");
@@ -369,7 +371,7 @@ const updatedDescription = description.trim() === initialDescription ? '' : desc
         console.log('Submitting description:', updatedDescription);
 
 // Continue with appending the rest of the form data
-formData.append('id', productId);
+formData.append('id', productId.toString());
 formData.append('title', finalTitle);
 formData.append('description', updatedDescription || finalTitle);
 formData.append('quantity', quantity);
@@ -391,7 +393,7 @@ console.log('FormData:', JSON.stringify(formData)); // Log FormData for debuggin
 
         console.log('Server response:', response.data);
         const productID = response.data.id;
-        showAlert('Product Updated successfully!', 3000);
+        showAlert('Product Updated successfully!', 3000, 'green');
         // Navigate back on successful update
         console.log('Product updated:', productID);
         navigation.navigate('ProductDetails', { productId: productID});
@@ -408,12 +410,16 @@ console.log('FormData:', JSON.stringify(formData)); // Log FormData for debuggin
     }
   };
 
+  const goBackToProductDetails = () => {
+    navigation.navigate('ProductDetails', { productId: Array.isArray(productId) ? productId[0] : productId});
+  };
+
 
   return (
     <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollViewContent}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={goBackToProductDetails}>
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.screenTitle}>Update Product</Text>
@@ -521,8 +527,14 @@ console.log('FormData:', JSON.stringify(formData)); // Log FormData for debuggin
                 handleChangeText(numericValue);
               }}
               placeholder="Price"
-              keyboardType="numeric" // Ensure only numeric input
-              maxLength={6} // Limit to 6 digits
+              keyboardType="decimal-pad" // Use decimal pad to input decimals
+              maxLength={8} // Limit to 6 characters (can be adjusted based on your needs)
+              onEndEditing={() => {
+                // Optionally, you can enforce proper formatting (e.g., no trailing decimals)
+                if (price && !price.includes('.')) {
+                  handleChangeText(price + '.'); // Add a trailing decimal if necessary
+                }
+              }}
             />
 
 
@@ -584,8 +596,10 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     picker: {
-        height: 50,
-        width: '100%',
+      width: '100%',
+      height: 55,
+      fontSize: 25,
+      overflow: 'visible', // Ensures text stays within bounds and is visible if it overflows
       },
       scrollViewContent: {
         flexGrow: 1,

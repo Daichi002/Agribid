@@ -11,28 +11,127 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth; 
 use Illuminate\Support\Facades\DB;
 use App\Http\Requests\UpdateLiveRequest; 
+use App\Models\User;
+use App\Models\Rating;
+use App\Models\Comment;
 
 
 class ProductController extends Controller
 {
-    public function index()
+        public function index()
     {
-        return Product::select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
-        ->where('live', true) // Add condition to check if 'live' is true
-        ->get();
-    }
+        $products = Product::select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+            ->where('live', true) // Add condition to check if 'live' is true
+            ->withAvg('ratings', 'rate') // Calculate average rating from the ratings table
+            ->withCount('ratings') // Count the number of ratings for each product
+            ->get()
+            ->map(function ($product) {
+                $product->ratings_avg_rate = $product->ratings_avg_rate ?? 0;
+                return $product;
+            });
 
+        return response()->json($products);
+    }
+    
+
+
+    
     public function productdetails($productId)
+    {
+        // Fetch the product details based on the provided productId
+        $product = Product::where('id', $productId)
+            ->select('id', 'user_id', 'title', 'commodity', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+            ->where('live', true)
+            ->with(['user:id,Firstname,Lastname']) // Eager load the product owner's details
+            ->first();
+    
+        // Check if the product exists
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+    
+        // Step 2: Get all products belonging to the same user (including the current one)
+        $userProducts = Product::where('user_id', $product->user_id)
+            ->select('id')
+            ->get();
+    
+        // Initialize variables for counting ratings and summing all ratings
+        $totalRatings = 0;  // Total sum of all ratings for the user's products
+        $userProductCount = 0;  // Count of all ratings for the user’s products
+    
+        // Step 3: Calculate ratings for each product owned by the user (including the current product)
+        foreach ($userProducts as $userProduct) {
+            // Fetch all ratings for the current product
+            $productRatings = Rating::where('product_id', $userProduct->id)
+                ->get(['rate']);  // No need to eager load the rater relationship here
+    
+            // If the product has ratings, count them and add to the total ratings
+            if ($productRatings->isNotEmpty()) {
+                // Count the ratings for this product and add it to the total rating count
+                $userProductCount += $productRatings->count();
+    
+                // Add the sum of ratings for this product to the total ratings
+                $totalRatings += $productRatings->sum('rate');
+            }
+        }
+    
+        // Calculate the user's overall average rating across all their products
+        $userRating = $userProductCount > 0 ? round($totalRatings / $userProductCount, 1) : 0;
+    
+        // Fetch ratings for the specified productId and include the review and user info (rater)
+        $productRatings = Rating::where('product_id', $productId)
+            ->select('id', 'rater_id', 'rate', 'review')
+            ->with(['rater:id,Firstname,Lastname'])  // Eager load the rater details for display
+            ->get();
+    
+        // Calculate product's average rating and count of ratings
+        $productRating = $productRatings->isNotEmpty() ? round($productRatings->avg('rate'), 1) : 0;
+        $productRatingCount = $productRatings->count();
+    
+
+        Log::info("Product details: " . $productRatings);
+        // Step 4: Prepare the response data
+        $response = [
+            'product' => $product,                 // Details of the specified product
+            'productRaterData' => $productRatings,     // Include ratings along with user details (Firstname, Lastname, rate, and review)
+            'productRating' => $productRating,     // Average rating of the specified product
+            'productRatingCount' => $productRatingCount, // Count of ratings for the specified product
+            'userRating' => $userRating,           // User's average rating across all their products
+            'userProductCount' => $userProductCount, // Number of ratings for all user products
+        ];
+    
+        return response()->json($response);
+    }
+    
+
+
+
+
+
+
+
+public function offerproduct($productId)
 {
-   // Fetch products belonging to the authenticated user
-    $products = Product::where('id', $productId)
+    // Fetch the product details based on the provided productId
+    $product = Product::where('id', $productId)
         ->select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
         ->where('live', true)
         ->with(['user:id,Firstname,Lastname']) // Only fetch the firstname and lastname from User
         ->first();
 
-    return response()->json($products);
+    // Check if the product exists
+    if (!$product) {
+        return response()->json(['message' => 'Product not found'], 404);
+    }
+
+    
+    return response()->json($product);
 }
+
+
+    
+
+
 
 
 public function getUserProducts(Request $request)
@@ -54,24 +153,31 @@ public function getUserProducts(Request $request)
 
 public function getUserwithProducts($userId)
 {
-    Log::info("Fetching userwithproductID: " . $userId);
+    Log::info("Fetching user with ID: " . $userId);
 
-    // Fetch products belonging to the user with user ID passed
+    // Fetch user information
+    $user = User::select('id', 'Firstname', 'Lastname')->find($userId);
+
+    // Check if user exists
+    if (!$user) {
+        return response()->json(['error' => 'User not found'], 404);
+    }
+
+    // Fetch products belonging to the user
     $products = Product::where('user_id', $userId)
         ->select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
         ->where('live', true)
-        ->with(['user:id,Firstname,Lastname']) // Fetch user information
-        // ->with(['ratings:id,product_id,rating']) 
+        ->with(['user:id,Firstname,Lastname']) // Fetch user information if products exist
         ->get();
 
-    Log::info("Fetching userwithproduct: " . $products);  
-        return response()->json([
-            'user' => $products->first()?->user, // Include user information
-            // 'ratings' => $products->ratings,
-            'products' => $products // Include products list with average rating as 'rating_avg'
-        ]);
+    Log::info("Fetched products: " . $products);
 
+    return response()->json([
+        'user' => $user, // Return user information even if there are no products
+        'products' => $products, // Include products list if they exist
+    ]);
 }
+
 
     public function getUserProductmessage(Request $request)
     {
@@ -87,6 +193,13 @@ public function getUserwithProducts($userId)
         return response()->json($products);
     }
     
+    public function suggestSRp(request $request)
+    {
+       
+    }
+
+
+
 
     public function store(Request $request)
 { 
@@ -105,6 +218,7 @@ public function getUserwithProducts($userId)
 
     $validatedData = $request->validate([
         'title' => 'required',
+        'commodity' => 'required',
         'description' => 'nullable|string',
         'quantity' => 'required|integer',
         'unit'=> 'nullable|string',
@@ -137,6 +251,7 @@ public function getUserwithProducts($userId)
         // Create the product with the user ID
         Product::create([
             'title' => $validatedData['title'],
+            'commodity' => $validatedData['commodity'],
             'description' => $validatedData['description'],
             'quantity' => $validatedData['quantity'] . ' ' . $validatedData['unit'], // Combine quantity and unit
             'price' => $validatedData['price'],
@@ -147,8 +262,8 @@ public function getUserwithProducts($userId)
 
         return response()->json([
             'message' => 'Product Created Successfully!',
-            'image_url' => $imageName ? Storage::url($path) : null
-        ]);
+            'image_url' => $imageName ? Storage::url($path) : null,
+        ], 201); // Set the HTTP status code here
     } catch (\Exception $e) {
         // Log the error message
         Log::error('Error creating product: ' . $e->getMessage());
@@ -229,22 +344,6 @@ public function getUserwithProducts($userId)
         }
     }
     
-
-    
-    public function getIDProducts(Request $request)
-    {
-        // Get the authenticated user's ID
-        $userId = $request->user()->id; 
-        Log::info("Fetching notif for user ID: " . $userId);
-    
-        // Fetch products belonging to the authenticated user
-        $products = Product::where('user_id', $userId)
-                           ->select('id', 'title', 'image', 'created_at')
-                           ->where('live', true) // Ensure this is the same as getUserProducts
-                           ->get();
-    
-        return response()->json($products);
-    }
     
     
 
@@ -261,4 +360,7 @@ public function getUserwithProducts($userId)
             return response()->json(['message' => 'Product not found or another error occurred.', 'error' => $e->getMessage()], 400);
         }
     }
+
+
+
 }

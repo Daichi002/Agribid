@@ -7,6 +7,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { icons } from '../constants';
 import { FontAwesome } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BASE_URL from '../components/ApiConfig';
 
 // Define User and Product interfaces
 interface User {
@@ -61,7 +62,7 @@ const UserProduct = () => {
         }
 
         // Fetch user products
-        const response = await axios.get(`http://192.168.31.160:8000/api/userproduct/${userId}`, {
+        const response = await axios.get(`${BASE_URL}/api/userproduct/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -71,7 +72,7 @@ const UserProduct = () => {
 
         // Preload product images
         const uriPromises = products.map(async (product: { image: any; id: any; }) => {
-          const uri = `http://192.168.31.160:8000/storage/product/images/${product.image}`;
+          const uri = `${BASE_URL}/storage/product/images/${product.image}`;
           const cachedUri = await cacheImage(uri);
           return { id: product.id, uri: cachedUri };
         });
@@ -80,7 +81,7 @@ const UserProduct = () => {
 
         // Fetch ratings for all products
         const productsWithRatings = await Promise.all(products.map(async (product: { id: any; }) => {
-          const ratingsResponse = await axios.get(`http://192.168.31.160:8000/api/productrating/${product.id}`, {
+          const ratingsResponse = await axios.get(`${BASE_URL}/api/productrating/${product.id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
 
@@ -294,6 +295,7 @@ const styles = StyleSheet.create({
     width: screenWidth * 0.45,
     maxWidth: 300,
     minWidth: 150,
+    height: 360,
     marginBottom: 10,
     marginRight: 10,
     backgroundColor: "#fff",

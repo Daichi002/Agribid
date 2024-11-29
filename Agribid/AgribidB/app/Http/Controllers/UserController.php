@@ -155,6 +155,52 @@ public function phoneExist(Request $request)
     }
 
 
+
+
+        // Admin Login
+    public function Adminlogin(Request $request)
+    {
+        // Validate the input data
+        $validatedData = $request->validate([
+            'Firstname' => 'required|string|max:255|exists:users,Firstname',
+            'Lastname' => 'required|string|max:255|exists:users,Lastname',
+            'password' => 'required|string|min:6|max:255',
+        ], [
+            'password.min' => 'Password must be at least 6 characters long.',
+        ]);
+
+        // Sanitize the input data
+        $Firstname = htmlspecialchars($validatedData['Firstname'], ENT_QUOTES, 'UTF-8');
+        $Lastname = htmlspecialchars($validatedData['Lastname'], ENT_QUOTES, 'UTF-8');
+        $password = htmlspecialchars($validatedData['password'], ENT_QUOTES, 'UTF-8');
+
+        // Attempt to authenticate the user with additional IsAdmin check
+        if (!Auth::attempt(['Firstname' => $Firstname, 'Lastname' => $Lastname, 'password' => $password])) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+
+        // Get the authenticated user
+        $user = Auth::user();
+
+        // Check if the user is an admin
+        if ($user->IsAdmin !== 1) {
+            Auth::logout(); // Log out the user if not an admin
+            return response()->json(['message' => 'Access denied: Admins only'], 403);
+        }
+
+        // Create a token for the user
+        $token = $user->createToken('authToken')->plainTextToken;
+
+        // Return the token and user data in the response
+        return response()->json([
+            'token' => $token,
+            'user' => $user // This will include user details like name, email, etc.
+        ]);
+    }
+
+
+
     public function update(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [

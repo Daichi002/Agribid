@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAlert } from '../components/AlertContext';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import BASE_URL from '../components/ApiConfig';
 
 const verifynumer = () => {
       const [isResendDisabled, setIsResendDisabled] = useState(true);
@@ -42,13 +43,13 @@ const verifynumer = () => {
         const sendOtp = async (Phoenenumber : any) => {
           
           try {
-            const response = await axios.post('http://192.168.31.160:8000/api/send-otp', {
+            const response = await axios.post(`${BASE_URL}/api/send-otp`, {
               to: Phonenumber,
             });
             console.log(response.data);
 
             if (response.status === 200) {
-              showAlert('Success, OTP sent successfully!', 3000);
+              showAlert('Success, OTP sent successfully!', 3000, 'green');
               setIsResendDisabled(true);
               setCountdown(60); // Reset countdown to 60 seconds
           }
@@ -79,7 +80,7 @@ const verifynumer = () => {
               console.log('Verifying OTP:', otp, Phonenumber);
       
               // Verify the OTP
-              const verifyResponse = await axios.post('http://192.168.31.160:8000/api/verify-otp', {
+              const verifyResponse = await axios.post(`${BASE_URL}/api/verify-otp`, {
                   otp: Number(otp),
                   to: Phonenumber,
               });
@@ -107,7 +108,7 @@ const verifynumer = () => {
               console.log('Sending registration request with data:', updateData);
       
               // Register the user
-              const Response = await axios.put(`http://192.168.31.160:8000/api/users/${currentUserId}`, updateData, {
+              const Response = await axios.put(`${BASE_URL}/api/users/${currentUserId}`, updateData, {
                   headers: {
                       Authorization: `Bearer ${token}`,
                       'Content-Type': 'application/json',
@@ -128,7 +129,7 @@ const verifynumer = () => {
       
                   await AsyncStorage.setItem('userInfo', JSON.stringify(updatedUser));
                   // return to log the userprofile
-                  showAlert('User Updated successfully!', 3000);
+                  showAlert('User Updated successfully!', 3000, 'green');
                   router.push('/profile/userdetails'); 
               } else {
                   Alert.alert("Error", "Update failed. Please try again.");

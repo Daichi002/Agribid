@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { icons } from '../constants';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { router, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import BASE_URL from '../components/ApiConfig';
 
 const Rating = () => {
-  const router = useRouter();
   const navigation = useNavigation();
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
-  const { productId, userId } = useLocalSearchParams();
+  const { transaction_id, productId, userId } = useLocalSearchParams();
   const ratingDescriptions = [
     { stars: 1, label: 'Very Bad', emoji: '😞' },
     { stars: 2, label: 'Bad', emoji: '😕' },
@@ -20,6 +20,12 @@ const Rating = () => {
     { stars: 4, label: 'Good', emoji: '😊' },
     { stars: 5, label: 'Excellent', emoji: '🤩' },
   ];
+
+  useEffect(() => {
+    console.log('Transaction ID:', transaction_id);
+    console.log('Product ID:', productId);
+    console.log('User ID:', userId);
+  }, []);
 
   const handleRating = (star: React.SetStateAction<number>) => setRating(star);
 
@@ -34,8 +40,9 @@ const Rating = () => {
         console.log('Submitted Rating:', rating, 'Review:', review);
 
         const response = await axios.post(
-            'http://192.168.31.160:8000/api/ratings',
+            `${BASE_URL}/api/ratings`,
             {
+                transaction_id: transaction_id,       // Transaction ID
                 rate: rating,             // Rating value
                 review: review,           // Optional review text
                 product_id: productId,           // Specify the product ID here
@@ -49,17 +56,42 @@ const Rating = () => {
             }
         );
 
-        if (response.status === 201) {
-          console.log("Report submitted successfully");
-          navigation.goBack();
+        if (response.status === 201|| response.status === 200) {
+          console.log("Rating submitted successfully");
+          router.push({
+            pathname: '../history/torate',
+          });
         } else {
-          console.error("Failed to submit report");
+          console.error("Failed to submit Rating");
         }
 
         console.log('Rating submitted:', response.data);
     } catch (error) {
-        console.error('Error submitting rating:', error);
-    }
+      if (axios.isAxiosError(error)) {
+          // Handle Axios-specific errors
+          console.error('Axios error occurred:', error.message);
+          
+          if (error.response) {
+              // The request was made and the server responded with a status code
+              // that falls out of the range of 2xx
+              console.error('Response error:', error.response.data);
+              console.error('Response status:', error.response.status);
+          } else if (error.request) {
+              // The request was made but no response was received
+              console.error('No response received:', error.request);
+          } else {
+              // Something happened in setting up the request that triggered an Error
+              console.error('Request setup error:', error.message);
+          }
+      } else {
+          // Handle other errors (non-Axios)
+          if (error instanceof Error) {
+            console.error('Error submitting rating:', error.message || error);
+          } else {
+            console.error('Error submitting rating:', error);
+          }
+      }
+  }  
 };
 
   return (

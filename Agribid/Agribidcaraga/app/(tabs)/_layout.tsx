@@ -2,6 +2,10 @@ import { Dimensions, StatusBar } from "react-native";
 import { SafeAreaView, Image, Text, View, StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
 import { icons } from "../../constants";
+import { useEffect, useState } from "react";
+import { fetchNewNotifications } from "../../components/notifindicator";
+import UnreadMessagesNotification from '../../components/UnreadMessagesNotification'; 
+import BASE_URL from '../../components/ApiConfig';
 
 // Define a type for your icons
 type IconProps = {
@@ -44,6 +48,21 @@ const TabIcon: React.FC<IconProps> = ({ icon, focused }) => {
 };
 
 const TabLayout = () => {
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
+
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const hasUnread = await fetchNewNotifications(); // Fetch unread status   
+      setHasNewNotifications(hasUnread); // Update state based on response
+      console.log('Has unread notifications:', hasUnread);
+    }, 60000); // Poll every 1 minute (60,000 milliseconds)
+  
+    return () => clearInterval(interval); // Cleanup the interval on unmount
+  }, []);
+
+
+
   return (
     <SafeAreaView style={styles.container}>
       <Tabs
@@ -82,21 +101,33 @@ const TabLayout = () => {
             ),
           }}
         />
+
         <Tabs.Screen
           name="notif"
           options={{
             headerShown: false,
             tabBarIcon: ({ focused }) => (
-              <TabIcon icon={icons.notif} focused={focused} />
+              <TabIcon
+              icon={hasNewNotifications ? icons.notifindi : icons.notif} // Conditionally set the icon
+              focused={focused}
+            />
             ),
           }}
         />
+
         <Tabs.Screen
           name="profile"
           options={{
             headerShown: false,
             tabBarIcon: ({ focused }) => (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Profile icon */}
               <TabIcon icon={icons.Profile} focused={focused} />
+  
+              {/* Unread messages notification icon */}
+              <UnreadMessagesNotification />
+            </View>
+              
             ),
           }}
         />

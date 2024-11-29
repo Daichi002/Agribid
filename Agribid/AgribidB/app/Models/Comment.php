@@ -14,11 +14,17 @@ class Comment extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'userId'); 
+        return $this->belongsTo(User::class, 'userId'); // Correct foreign key
     }
+    
 
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function replies()
+    {
+    return $this->hasMany(Reply::class, 'comment_id');
     }
 }

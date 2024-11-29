@@ -9,7 +9,7 @@ export type RootStackParamList = {
     "userproduct": { userId: string };
     "createsell": undefined;
     "createbuy": undefined;
-    "ProductDetails": { productId: string };
+    "ProductDetails": { productId: string};
     "profile": undefined;
     "messagelist": undefined;
     "Rating": undefined;

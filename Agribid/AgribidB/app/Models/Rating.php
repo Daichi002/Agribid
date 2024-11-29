@@ -10,6 +10,7 @@ class Rating extends Model
     use HasFactory;
 
     protected $fillable = [
+        'transaction_id',
         'rater_id',
         'product_id',
         'rate',
@@ -27,4 +28,10 @@ class Rating extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    public function rater()
+{
+    return $this->belongsTo(User::class, 'rater_id');
+}
+
 }

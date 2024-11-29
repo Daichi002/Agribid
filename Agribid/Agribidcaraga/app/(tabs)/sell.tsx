@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, TextInput, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, ActivityIndicator, Dimensions} from "react-native";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { View, Text, TextInput, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal,
+ Dimensions, ImageBackground} from "react-native";
 import { Picker } from '@react-native-picker/picker';
 import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
@@ -8,18 +9,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { icons } from "../../constants";
 import { FontAwesome } from '@expo/vector-icons';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import Toast from 'react-native-simple-toast';
+import BASE_URL from '../../components/ApiConfig';
 
 import * as FileSystem from 'expo-file-system';
+import { Float } from "react-native/Libraries/Types/CodegenTypes";
 
 interface Barangay {
   code: string;
   name: string;
 }
 
+ // In-memory cache for image URIs
 
-const ProductImage = React.memo(({ imageUri }: { imageUri: string }) => {
-  return <Image source={{ uri: imageUri }} style={styles.productImage} />;
-});
 
 interface ProductItemProps {
   item: {
@@ -30,8 +33,8 @@ interface ProductItemProps {
     price: string;
     locate: string;
     created_at: string;
-    averageRating: number;
-    ratings: any[];
+    ratings_avg_rate: Float;
+    ratings_count: number;
   };
   handleViewDetails: (item: any) => void;
 }
@@ -39,118 +42,149 @@ interface ProductItemProps {
 const screenWidth = Dimensions.get('window').width;
 const screenHeight = Dimensions.get('window').height;
 
+// Centralized image cache
+const imageCache: { [key: string]: Promise<string> } = {};
+
 const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const imageCache: { [key: string]: string } = {}; // In-memory cache for image URIs
+  const averageRating = parseFloat(item.ratings_avg_rate.toString()).toFixed(1);
+
+  const uri = useMemo(
+    () => `${BASE_URL}/storage/product/images/${item.image}`,
+    [item.image]
+  );
 
   useEffect(() => {
     const loadImage = async () => {
-      const uri = `http://192.168.31.160:8000/storage/product/images/${item.image}`;
       setLoading(true);
       setError(false);
 
       try {
-        // Check if URI is already cached
-        if (imageCache[uri]) {
-          setImageUri(imageCache[uri]);
-        } else {
-          const filename = uri.split('/').pop();
-          const fileUri = `${FileSystem.documentDirectory}${filename}`;
-          const info = await FileSystem.getInfoAsync(fileUri);
+        // Check if the image URI is already being processed
+        if (!imageCache[uri]) {
+          // Cache the promise to avoid duplicate downloads
+          imageCache[uri] = (async () => {
+            const filename = uri.split('/').pop();
+            const fileUri = `${FileSystem.documentDirectory}${filename}`;
+            const info = await FileSystem.getInfoAsync(fileUri);
 
-          if (info.exists) {
-            imageCache[uri] = fileUri;
-            setImageUri(fileUri);
-          } else {
-            // Download the image if it isn't locally available
-            const response = await FileSystem.downloadAsync(uri, fileUri);
-            imageCache[uri] = response.uri;
-            setImageUri(response.uri);
-          }
+            if (info.exists) {
+              // If the image exists locally, return its URI
+              return fileUri;
+            } else {
+              // Download the image and store it locally
+              const response = await FileSystem.downloadAsync(uri, fileUri);
+              if (response.status === 200) {
+                const fileInfo = await FileSystem.getInfoAsync(response.uri);
+                if (fileInfo.exists && fileInfo.size > 0) {
+                  return response.uri;
+                }
+                throw new Error('Downloaded image file is corrupted or empty');
+              }
+              throw new Error('Failed to download image');
+            }
+          })();
         }
+
+        // Await the cached promise and set the image URI
+        const downloadedUri = await imageCache[uri];
+        setImageUri(downloadedUri);
       } catch (e) {
-        console.error("Error loading image:", e);
-        setError(true); // Set error state if download fails
+        console.error('Error loading image:', e);
+        setError(true);
       } finally {
         setLoading(false);
       }
     };
 
     loadImage();
-  }, [item.image]); // Reload image if `item.image` changes
+  }, [uri]);
 
-
-  if (loading) {
-    return <ActivityIndicator size="large" color="#0000ff" />;
-  }
-
-  if (error) {
-    return <Text style={{ color: 'red' }}>Failed to load image</Text>;
-  }
-
-   // Skeleton Loader Placeholder
-   const skeletonLoader = (
+  // Skeleton Loader Placeholder
+  const SkeletonLoader = () => (
     <View style={styles.skeletonContainer}>
-      <View style={styles.skeletonImage} />
       <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonImage} />
       <View style={styles.skeletonDescription} />
       <View style={styles.skeletonPrice} />
       <View style={styles.skeletonLocation} />
-      <View style={styles.skeletonStars} />
-    </View>
-  );
-
-   // Placeholder for the image when loading
-   const imagePlaceholder = (
-    <View style={styles.imagePlaceholder}>
-      <ActivityIndicator size="large" color="#0000ff" />
-    </View>
-  );
-
-  const productContent = (
-    <TouchableOpacity onPress={() => handleViewDetails(item)}>
-      <View style={styles.productItem}>
-        <Text style={styles.productTitle}>{item.title}</Text>
-
-        <View style={styles.imagecontainer}>
-          {loading || !imageUri ? imagePlaceholder : <ProductImage imageUri={imageUri} />}
-        </View>
-
-
-        <View style={styles.productdetailscontainer}>
-          <Text style={styles.productDescription} numberOfLines={2} ellipsizeMode="tail">
-            {item.description}
-          </Text>
-          <Text style={styles.productPrice}>P{item.price}</Text>
-          <Text style={styles.productLocation}>{item.locate}</Text>        
-          <View style={styles.stars}>
-          {[...Array(5)].map((_, index) => {
-            const stars = index + 1; // 1 to 5
-            return (
-              <FontAwesome
-                key={stars}
-                name={stars <= Math.round(item.averageRating) ? 'star' : 'star-o'}
-                size={22}
-                color={stars <= Math.round(item.averageRating) ? '#FFC107' : '#E0E0E0'}
-              />
-            );
-          })}
-          <Text style={styles.averageRatingText}>
-            {typeof item.averageRating === 'number' && !isNaN(item.averageRating)
-              ? item.averageRating.toFixed(1)
-              : '0.0'}
-            {Array.isArray(item.ratings) && item.ratings.length > 0 ? ` (${item.ratings.length})` : ''}
-          </Text>
-        </View>
-        </View>
+      <View style={styles.skeletonStars}>
+        {[...Array(5)].map((_, index) => (
+          <View key={index} style={styles.skeletonStar} />
+        ))}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
-  return loading ? skeletonLoader : productContent;
+  // Image Subcomponent
+  const ProductImage = React.memo(({ imageUri }: { imageUri: string }) => (
+    <Image
+      source={imageUri ? { uri: imageUri } : icons.LoadingAgribid}
+      style={styles.productImage}
+      resizeMode="contain"
+      onLoad={() => setLoading(false)}
+      onError={() => {
+        setError(true);
+        setLoading(false);
+      }}
+    />
+  ));
+
+  return (
+      <TouchableOpacity onPress={() => handleViewDetails(item)}>
+        <View style={styles.productItem}>
+          <Text style={styles.productTitle}>{item.title}</Text>
+
+          <View style={styles.imagecontainer}>
+            {loading ? (
+              <SkeletonLoader />
+            ) : error ? (
+              <Image
+                source={icons.LoadingAgribid} // Fallback placeholder
+                style={styles.imagePlaceholder}
+                resizeMode="contain"
+              />
+            ) : (
+              <Image
+                source={imageUri ? { uri: imageUri } : icons.LoadingAgribid}
+                style={styles.productImage}
+                resizeMode="cover"
+              />
+            )}
+          </View>
+
+          <View style={styles.productdetailscontainer}>
+            <Text style={styles.productDescription} numberOfLines={2} ellipsizeMode="tail">
+              {item.description}
+            </Text>
+            <Text style={styles.productPrice}>P{item.price}</Text>
+            <Text style={styles.productLocation}>{item.locate}</Text>
+
+            <View style={styles.stars}>
+              {[...Array(5)].map((_, index) => {
+                const stars = index + 1;
+                return (
+                  <FontAwesome
+                    key={stars}
+                    name={stars <= Math.round(item.ratings_avg_rate) ? 'star' : 'star-o'}
+                    size={22}
+                    color={stars <= Math.round(item.ratings_avg_rate) ? '#FFC107' : '#E0E0E0'}
+                  />
+                );
+              })}
+              <Text style={styles.averageRatingText}>
+                {averageRating}
+                {item.ratings_count > 0 ? ` (${item.ratings_count}) ` : ''}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+  );
 });
+
 
  interface Product {
     id: string;
@@ -160,9 +194,11 @@ const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) =
     price: string;
     locate: string;
     created_at: string;
-    averageRating: number;
-    ratings: any[];
+    ratings_avg_rate: number;
+    ratings_count: number;
   }
+
+const ITEM_HEIGHT = 360; // Define the height of each item
 
 const Sell = () => {
  
@@ -174,14 +210,13 @@ const Sell = () => {
   const [filterOption, setFilterOption] = useState("locate");
   const [filterLetters, setFilterLetters] = useState("");
   const [currentDate] = useState(new Date().toLocaleDateString());
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [price, setPrice] = useState(0);
   // const [range, setRange] = useState({ min: 1, max: 1000 });
 
-  const [ratings, setRatings] = useState<any[]>([]);
+  // const [ratings, setRatings] = useState<any[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const categories = ["Fruits", "LiveStock & Poultry", "Fisheries", "Vegetable", "Crops"];
@@ -240,19 +275,10 @@ const renderProduct = useCallback(async () => {
     const storedProducts = existingData ? JSON.parse(existingData) : [];
 
     // Set products and total count in UI state
+    // console.log('Stored products:', storedProducts);
     setProducts(storedProducts as Product[]);
     setTotalProducts(storedProducts.length);
-
-    // Extract ratings and calculate average rating
-    const extractedRatings = storedProducts.map((product: { ratings: any; averageRating: any; }) => ({
-      ratings: product.ratings || [],
-      averageRating: product.averageRating || 0,
-    }));
-
-    setRatings(extractedRatings.map((rating: any) => rating.ratings).flat());
-    setAverageRating(
-      extractedRatings.reduce((acc: any, curr: { averageRating: any; }) => acc + curr.averageRating, 0) / extractedRatings.length
-    );
+    // setAverageRating(storedProducts.ratings_avg_rate);
 
     console.log('Product data rendered successfully.');
   } catch (error) {
@@ -260,8 +286,9 @@ const renderProduct = useCallback(async () => {
   }
 }, []);
 
+
 const isFetching = useRef(false); // Flag for main fetch status
-const isFetchingRatings = useRef(false); // Flag for ratings fetch status
+// const isFetchingRatings = useRef(false); // Flag for ratings fetch status
 const lastFetchTime = useRef(0);
 const debounceDelay = 10000; // Set a 10-second delay between fetches
 
@@ -283,7 +310,7 @@ useEffect(() => {
     if (!isFetching.current) { // Ensure no ongoing fetch before triggering another
       fetchProducts(); // Fetch products from the server at intervals
     }
-  }, 1 * 60 * 1000); // 5 minutes in milliseconds
+  }, 10 * 60 * 1000); // 10 minutes in milliseconds
 
   return () => clearInterval(interval); // Clear the interval on component unmount
 }, []);
@@ -297,134 +324,65 @@ const onRefresh = useCallback(async () => {
   if (!isFetching.current) { // Check if a fetch is already in progress
     setIsRefreshing(true);
     isFetching.current = true;
+    Toast.show('Products Updated', Toast.SHORT);
     await fetchProducts(); // Trigger the fetch for products
     setIsRefreshing(false);
     isFetching.current = false; // Reset flag after refresh completes
   }
 }, []);
 
+
 const fetchProducts = async () => {
   try {
     const token = await AsyncStorage.getItem('authToken');
     if (!token) {
       console.error('No auth token found');
-      return;
+      navigation.navigate('(auth)/login');
     }
 
-    const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/products', {
+    const response = await axios.get(`${BASE_URL}/api/products`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
     });
 
-    let products = response.data;
+    const newProducts = response.data;
 
-    // Enhance products with ratings if the ratings are not already fetched
-    for (let i = 0; i < products.length; i++) {
-      const productWithRating = await fetchProductsRatings(products[i].id); // Fetch ratings for each product
-      products[i] = { ...products[i], ...productWithRating }; // Merge the ratings with the product data
+    // console.log('Fetched products:', newProducts);
+
+    const existingProductsJson = await AsyncStorage.getItem('products');
+    const existingProducts = existingProductsJson ? JSON.parse(existingProductsJson) : [];
+
+    let updateNeeded = false;
+
+    if (existingProducts.length !== newProducts.length) {
+      updateNeeded = true;
+    } else {
+      for (let i = 0; i < newProducts.length; i++) {
+        const existingProduct = existingProducts.find((p: { id: any; }) => p.id === newProducts[i].id);
+        if (!existingProduct || JSON.stringify(existingProduct) !== JSON.stringify(newProducts[i])) {
+          updateNeeded = true;
+          break;
+        }
+      }
     }
 
-    // Now you can use the products with ratings
-    await updateAsyncStorage(products); // Update AsyncStorage with the new products
-    console.log('Fetched products with ratings:');
+    if (updateNeeded) {
+      await AsyncStorage.setItem('products', JSON.stringify(newProducts));
+      renderProduct();
+      console.log('Updated AsyncStorage with new products data:', newProducts);
+    } else {
+      console.log('No updates needed, products data is unchanged.');
+    }
   } catch (error) {
     console.error("Error fetching products:", error);
   }
 };
 
-// Update AsyncStorage without updating the UI state directly
-const updateAsyncStorage = async (newData: any[]) => {
-  try {
-    // Fetch current data from AsyncStorage
-    const existingData = await AsyncStorage.getItem('products');
-    let currentData = existingData ? JSON.parse(existingData) : [];
-
-    // Create a map of current data for quick lookup
-    const currentDataMap = new Map(currentData.map((item: any) => [item.id, item]));
-
-    // Create a Set of new product IDs for easy comparison
-    const newProductIds = new Set(newData.map(item => item.id));
-
-    // Update existing entries and add new ones
-    newData.forEach(newItem => {
-      currentDataMap.set(newItem.id, newItem);
-    });
-
-    // Remove items from currentDataMap that are not in newData
-    for (let id of currentDataMap.keys()) {
-      if (!newProductIds.has(id)) {
-        currentDataMap.delete(id);
-      }
-    }
-
-    // Convert map back to array
-    const updatedData = Array.from(currentDataMap.values());
-
-    // Save updated data to AsyncStorage
-    await AsyncStorage.setItem('products', JSON.stringify(updatedData));
-
-    console.log('AsyncStorage updated successfully.');
-    await renderProduct(); // Update UI state after AsyncStorage update
-  } catch (error) {
-    console.error('Failed to update AsyncStorage:', error);
-  }
-}; 
-  
-const fetchProductsRatings = async (productId: any) => {
-  try {
-    if (isFetchingRatings.current) {
-      console.log('Ratings fetch already in progress for productId:', productId);
-      return {}; // Skip if the ratings fetch is already in progress
-    }
-
-    isFetchingRatings.current = true; // Set flag to indicate a ratings fetch is in progress
-
-    const token = await AsyncStorage.getItem('authToken');
-    if (!token) {
-      console.error('No auth token found for ratings');
-      isFetchingRatings.current = false; // Reset flag
-      return {};
-    }
-
-    const ratingsResponse = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/productrating/${productId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    const ratings = ratingsResponse.data.ratings || []; // Default to an empty array if undefined
-    const averageRating = ratingsResponse.data.averageRating || 0;
-
-    isFetchingRatings.current = false; // Reset flag after ratings fetch completes
-
-    // Ensure the ratings are an array and handle safely
-    if (!Array.isArray(ratings)) {
-      console.error('Invalid ratings format for productId:', productId);
-      return {
-        ratings: [],
-        averageRating: 0
-      };
-    }
-
-    return {
-      ratings,
-      averageRating
-    };
-  } catch (error) {
-    console.error("Error fetching product ratings:", error);
-    isFetchingRatings.current = false; // Reset flag if error occurs
-    return { ratings: [], averageRating: 0 }; // Return empty ratings and 0 average if error occurs
-  }
-};
-
-  
-
-
 
   const handleViewDetails = (product: any) => {
     console.log('Viewing product details:', product.id);
-    navigation.navigate('ProductDetails', { productId: product.id });
+    navigation.navigate('ProductDetails', { productId: product.id});
   };
 
   const handleSearchChange = (text: string) => {
@@ -518,6 +476,13 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
       <ProductItem item={item} handleViewDetails={handleViewDetails} />
     );
 
+    const memoizedRenderItem = useCallback(
+      (item: { item: Product; }) => {
+        return renderItem(item);
+      },
+      [renderItem] // Only re-memoize when renderItem changes
+    );
+
     // for debugging purpose only
     // const removeProductsData = async () => {
     //   try {
@@ -537,12 +502,14 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
     // };
 
   return (
+    <ProtectedRoute>
     <View style={styles.container}>
-      {/* {selectedProduct ? (
-        // error on productdetails no idea how to resolve 
-        <ProductDetails product={selectedProduct} onBack={() => setSelectedProduct(null)} />
-      ) : ( */}
-        <>
+      <ImageBackground
+          source={icons.Agribid} // Your image source
+          style={styles.backgroundImage} // Style for the image
+          resizeMode="cover" // You can use 'contain' or 'cover' depending on the effect you want
+        >
+     
           <View style={styles.dashboard}>
             {/* button to post navigate you to createsell page */}
             <TouchableOpacity
@@ -574,12 +541,20 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
             <Text style={styles.totalProducts}>Total Post: {totalProducts}</Text>
           </View>
           <View style={styles.searchSortFilter}>
-            <TextInput
-              style={styles.search}
-              placeholder="Search here"
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-            />
+          <View style={styles.searchContainer}>
+              <Image
+                source={icons.search}
+                style={styles.searchIcon}
+                resizeMode="contain"
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search here"
+                value={searchQuery}
+                onChangeText={handleSearchChange}
+              />
+            </View>
+
             <>
       <TouchableOpacity onPress={() => setModalVisible(true)}>
         <Image 
@@ -654,25 +629,37 @@ const applyBarangayFilter = (selectedBarangay: string, selectedCategory: string)
   </View>
 </Modal>
 </>
-          </View>       
+    </View>       
           <FlatList
             ref={flatListRef}
             data={filteredProducts}
-            renderItem={renderItem}
+            renderItem={memoizedRenderItem} // Memoized render item function
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.inventory}
-            extraData={products}
+            extraData={filteredProducts} // Keep this to avoid unnecessary re-renders of the list
             refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={onRefresh}
-              />
+              <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
             }
-            numColumns={2}
+            numColumns={2} // Adjust this as needed for layout
+            initialNumToRender={10} // Set a smaller initial number of rendered items
+            maxToRenderPerBatch={10} // Limit the number of items to render in each batch
+            windowSize={5} // Controls the number of items rendered off-screen (default 21, lower is better)
+            removeClippedSubviews={true} // Optimize performance by removing off-screen items
+            getItemLayout={(data, index) => ({
+              length: ITEM_HEIGHT, // Specify the height of your list items for optimization
+              offset: ITEM_HEIGHT * index, // Calculate the offset for each item
+              index,
+            })}
+            onEndReachedThreshold={0.1} // Trigger onEndReached when user scrolls close to the end
+            onEndReached={() => {
+              // Fetch more data if required when end is reached
+            }}
+            scrollEventThrottle={16} // Optimize scroll event performance
+            // Prevent unnecessary re-renders
           />
-        </>
-      )}
+      </ImageBackground>
     </View>
+    </ProtectedRoute>
   );
 };
 
@@ -681,8 +668,12 @@ export default Sell;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 10,
+    padding: 5,
     backgroundColor: "#f0f0f0",
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
   },
   buttonContainer: {
     backgroundColor: '#28a745',
@@ -729,7 +720,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 15,
+    marginTop: 10,
     height  : 50,
   },
   addProductLink: {
@@ -818,10 +810,12 @@ const styles = StyleSheet.create({
     
 
   searchSortFilter: {
-    marginBottom: 20,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: "space-between",
     alignItems: 'center',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
   },
   slider: {
     width: 30, // Adjust size as needed
@@ -869,63 +863,93 @@ const styles = StyleSheet.create({
     flexDirection: 'row', // Arrange filter elements horizontally
     alignItems: 'center', // Align items vertically in the center
   },
-  search: {
-    height: 40,
-    width: '80%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    alignSelf: 'flex-start',
-    fontSize: 15,
+  searchContainer: {
+    flexDirection: 'row', // Arrange icon and input horizontally
+    alignItems: 'center', // Center items vertically
+    borderWidth: 1, // Add border to simulate an input field
+    borderColor: '#ccc', // Border color
+    borderRadius: 8, // Rounded corners
+    backgroundColor: '#f5f5f5', // Background color of the input
+    paddingHorizontal: 10, // Add horizontal padding
+    height: 50, // Fixed height for the search bar
+    width: '80%', // Take up the full width of the container
   },
+  searchIcon: {
+    width: 20, // Icon width
+    height: 20, // Icon height
+    marginRight: 10, // Space between icon and input
+  },
+  searchInput: {
+    flex: 1, // Take up the remaining space
+    fontSize: 16, // Font size for input text
+    color: '#333', // Text color
+    padding: 5, // Inner padding for text
+  },
+  
   inventory: {
     paddingBottom: 20,
   },
   skeletonContainer: {
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: 15,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f2f2f2', // Light background for placeholder
+    borderRadius: 5,
   },
   skeletonImage: {
     width: '100%',
-    height: 200,
+    height: '60%',
     backgroundColor: '#ccc',
-    marginBottom: 15,
+    borderRadius: 5,
+    marginBottom: 10,
   },
   skeletonTitle: {
     width: '60%',
     height: 20,
     backgroundColor: '#ccc',
+    borderRadius: 5,
     marginBottom: 10,
   },
   skeletonDescription: {
     width: '80%',
     height: 14,
     backgroundColor: '#ccc',
+    borderRadius: 5,
     marginBottom: 10,
   },
   skeletonPrice: {
     width: '40%',
     height: 20,
     backgroundColor: '#ccc',
+    borderRadius: 5,
     marginBottom: 10,
   },
   skeletonLocation: {
     width: '50%',
     height: 14,
     backgroundColor: '#ccc',
+    borderRadius: 5,
     marginBottom: 10,
   },
   skeletonStars: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    marginTop: 10,
   },
+  skeletonStar: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#ccc',
+    borderRadius: 10,
+    marginHorizontal: 2,
+  },
+  
     productItem: {
       width: screenWidth * 0.45,
-      maxWidth: 300,
+      maxWidth: 400,
       minWidth: 150,
+      height: 330,
       marginBottom: 10,
       marginRight: 10,
       backgroundColor: "#fff",
@@ -938,20 +962,23 @@ const styles = StyleSheet.create({
       shadowOffset: { width: 0, height: 5 },
       elevation: 5,
       alignItems: 'center',         // Center items horizontally in container
-      // justifyContent: 'center',      // Center items vertically if needed
     },
+
     productdetailscontainer: {
       width: '100%',
       flex: 1,
       marginRight: 5,
-      // alignItems: 'center',         // Center items horizontally in container if needed
     },
     imagecontainer: {
       width: screenWidth * 0.4,
-      height: screenHeight * 0.25,
+      height: screenHeight * 0.2,
       maxHeight: 200,
       marginRight: 5,
       alignItems: 'center',         // Ensure image content is centered
+    },
+    errorText: {
+      color: 'red',
+      fontSize: 16,
     },
     imagePlaceholder: {
       width: screenWidth * 0.4,

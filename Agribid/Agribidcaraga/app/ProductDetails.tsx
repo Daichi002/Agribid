@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, Image, TextInput, FlatList, StyleSheet, TouchableOpacity,
    Modal, KeyboardAvoidingView, Platform, Keyboard, Alert, ActivityIndicator,
-   Dimensions, } from 'react-native';
+   Dimensions, ImageStyle} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -9,16 +9,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { FontAwesome } from '@expo/vector-icons';
 
+import ProductRaterModal from '../components/ProductRaterModal';
 import { icons } from "../constants";
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
+import UnreadMessagesNotification from '../components/UnreadMessagesNotification'; 
+import BASE_URL from '../components/ApiConfig';
+import SideModal from '../components/sidemodal';
+
 
 const screenWidth = Dimensions.get('window').width;
+const screenHeight = Dimensions.get('window').height;
 interface Product {
   id: string;
   user_id: string;
   title: string;
+  commodity: string;
   image: string;
   description: string;
   quantity: string;
@@ -72,22 +79,7 @@ type Message = {
 };
 
 
-interface ProductDetailsProps {
-  product: string | string[] | Product; // Accepting the possible types for product
-}
 
-const cacheImage = async (uri: string) => {
-  const filename = uri.split('/').pop();
-  const fileUri = `${FileSystem.documentDirectory}${filename}`;
-  const info = await FileSystem.getInfoAsync(fileUri);
-
-  if (info.exists) {
-    return fileUri; // Return cached image URI
-  } else {
-    const response = await FileSystem.downloadAsync(uri, fileUri);
-    return response.uri; // Return newly downloaded image URI
-  }
-};
 
 interface product {
   id: string;
@@ -101,24 +93,126 @@ interface product {
   user: User;
 }
 
+interface ProductDetails {
+  quantity: string;
+  price: string;
+  image: string;
+  title: string;
+}
+
+interface Rate {
+  id: number;
+  rater: User; 
+  rate: number ;
+  review: string | null;
+}
+
+// Simple image cache
+const imageCache: { [key: string]: string } = {};
+
+interface ImageLoaderProps {
+  imageUri: string; // Can be either product?.image or item.image
+  style?: ImageStyle; // Optional custom styles passed from the parent
+}
+
+const ImageLoader: React.FC<ImageLoaderProps> = ({ imageUri, style }) => {
+  const [loading, setLoading] = useState(true);
+  const [uri, setUri] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const loadImage = async () => {
+      const fullUri = `${BASE_URL}/storage/product/images/${imageUri}`;
+      setLoading(true);
+      setError(false);
+
+      try {
+        // Check if URI is already cached
+        if (imageCache[fullUri]) {
+          setUri(imageCache[fullUri]);
+        } else {
+          const filename = fullUri.split('/').pop();
+          const fileUri = `${FileSystem.documentDirectory}${filename}`;
+          const info = await FileSystem.getInfoAsync(fileUri);
+
+          if (info.exists) {
+            imageCache[fullUri] = fileUri;
+            setUri(fileUri);
+          } else {
+            // Download the image if it isn't locally available
+            const response = await FileSystem.downloadAsync(fullUri, fileUri);
+            imageCache[fullUri] = response.uri;
+            setUri(response.uri);
+          }
+        }
+      } catch (e) {
+        console.error('Error loading image:', e);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadImage();
+  }, [imageUri]); // Trigger whenever imageUri changes
+
+  if (loading) {
+    return (
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Text>Error loading image</Text>
+      </View>
+    );
+  }
+
+  return (
+    uri ? (
+      <Image
+        source={{ uri }}
+        style={[{ resizeMode: 'cover' }, style]} // Allow custom styles to override default styles
+      />
+    ) : null
+  );
+};
+
+
+
+
+
+
 const ProductDetails = () => {
   const navigation = useNavigation();
+  const route = useRoute();
+  const [srpData, setSrpData] = useState<{ commodities: Array<any> } | null>(null);
+  const [selectedCommodity, setSelectedCommodity] = useState<any | null>(null);
   const [product, setProduct] = useState<product | null>(null);
-  const [ratingCount, setRatingCount] = useState(0);
-  const [rating, setRating] = useState();
+  const imageUri = product?.image; 
+  const [productrating, setProductsRating] = useState(0);
+  const [productratingcount, setPdoductRatingCount] = useState(0);
+  const [productrater, setProductrater] = useState<Rate[]>([]);  // Use Rate[] instead of [Rate]
+  const [userRating, setUserRatings] = useState(0); 
   const [averageRating, setAverageRating] = useState(0);
-  const { productId } = useLocalSearchParams();
+  const { productId, from } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
   const [messageList, setMessageList] = useState<{ first: Message; latest: Message }[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [totalmessage, setTotalmessage] = useState(0);
   const router = useRouter();
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  // const [imageUri, setImageUri] = useState<string | null>(null);
   const [replyVisibility, setReplyVisibility] = useState<{ [key: string]: boolean }>({});
   const [reply_Visibility, setReply_Visibility] = useState<{ [key: string]: boolean }>({});
   const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [starModalVisible, setStarModalVisible] = useState(false);
 
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [issideModalVisible, setIssideModalVisible] = useState(false);
+
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const replyInputRef = useRef<TextInput>(null);
@@ -133,12 +227,12 @@ const ProductDetails = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
+
   // console.log('Parsed Product:', productId);
 
   useFocusEffect(
     useCallback(() => {
         fetchProduct();
-        fetchRating();
     }, [productId])
 );
 
@@ -155,74 +249,69 @@ const ProductDetails = () => {
         return;
       }   
       console.log('Parsed Product:', productId);
-      const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/productdetails/${productId}`, {
+      const response = await axios.get(`${BASE_URL}/api/productdetails/${productId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
   
-      const product = response.data;  
-      setProduct(product);
-      // console.log('Fetched one Product:', product);
+      const { product, productRating, productRatingCount, userRating, userProductCount } = response.data;
+
+      setProduct(product);  // Set the product details
+      await fetchSRP(product.title);  // Fetch SRP data for the product category
+      setSelectedCommodity(product.commodity);  // Set the filtered commodities list
+      setProductsRating(productRating);  // Set the overall average rating
+      setPdoductRatingCount(productRatingCount);  // Set the count of ratings for this product
+  
+      // Optionally, you can set ratings for other products if you want to display them
+      setProductrater(response.data.productRaterData); // Ratings for products with user and details
+     
+      setUserRatings(userRating);  // Ratings for products with the same user_id
+      setAverageRating(userProductCount);  // Number of products considered for the average rating
+      // console.log('productrater:', response.data.productRaterData);
     } catch (error) {
       console.error("Error fetching product:", error);
     }
   };
 
-  // if(!product) {
-  //   loading = true;
-  // }
-
-  //fetch the rating of the product
-  const fetchRating = async () => {
-    if (!productId) {
-        console.error('No product ID found');
-        return;
-    }
+  const fetchSRP = async (category: string) => {
     try {
-        const token = await AsyncStorage.getItem('authToken');
-        if (!token) {
-            console.error('No auth token found');
-            return;
-        }   
-        
-        // console.log('Fetching product Rating:', productId);
-
-        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/ratings/${productId}`, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        });
-
-        const ratings = response.data;  
-
-         // Calculate the average rating
-         if (ratings.length > 0) {
-          const total = ratings.reduce((acc: number, rating: { rate: number }) => acc + rating.rate, 0);
-          const averageRating = total / ratings.length;
-          const ratingCount = ratings.length;
-
-          // Set the average rating in state or log it
-          // console.log('Average Product Rating:', averageRating);
-          setAverageRating(averageRating); // Make sure you have a state variable to hold this
-          setRatingCount(ratingCount);
-      } else {
-          console.log('No ratings found for this product');
-          setAverageRating(0); // Set to 0 if no ratings
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) {
+        navigation.navigate("(auth)/login");
+        return;
       }
+      // setSrpData(null); // Reset the SRP data
+  
+      console.log("Fetching SRP data for category:", category);
+      const response = await axios.get(
+        `${BASE_URL}/api/SRP/${category}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-        setRating(ratings); // Assuming ratings is an array of ratings
-        // console.log('Fetched Product Rating:', ratings);
+      // console.log("SRP Data:", response.data);
+  
+      if (Array.isArray(response.data.commodities)) {
+        // Set the full SRP data
+        setSrpData(response.data);
+  
+        // Extract only the commodity names
+        const commodityNames: string[] = response.data.commodities.map(
+          (item: { commodity: string }) => item.commodity
+        );
+        
+      } else {
+        console.error("Commodities data is not an array:", response.data.commodities);
+        setSrpData(null);
+      }
     } catch (error) {
-        console.error("Error fetching product Rating:", error);
+      console.error("Error fetching SRP:", error);
     }
-};
-
-
-  // useEffect(() => {
-  //   console.log('Product:', product);
-  //  });
-
+  };
   
   // fetch userinfo from the asyncstorage
   useEffect(() => {
@@ -267,19 +356,6 @@ const ProductDetails = () => {
     }, [])
   );
 
-  
-
-
-
-useEffect(() => {
-  const loadImage = async () => {
-    const uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/product/images/${product?.image}?${new Date().getTime()}`;
-    setImageUri(await cacheImage(uri));
-    setLoading(false);
-  };
-
-  loadImage();
-},[product?.image]);
 
   // this will fetch all the commnet for a product
   useEffect(() => {
@@ -297,7 +373,7 @@ useEffect(() => {
           return;
         }
   
-        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/${id}`, {
+        const response = await axios.get(`${BASE_URL}/api/comments/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`, // Include token if needed
           },
@@ -340,6 +416,7 @@ useEffect(() => {
   }, [product?.id]);
 
 
+ 
   // the message function start here 
   // function to send user if user is person who creator open modal if not send user to message
   const handlePress = () => {
@@ -353,32 +430,12 @@ useEffect(() => {
             productId: product.id, // Pass the product ID
             productuserId: product.user_id, // Pass the user ID if needed
           },
-        });
+        });             
       }
     } else {
       console.error('parsedProduct is null');
     }
   };
-  
-  // function for message list
-  // const sortMessages = (messages: Message[], currentUserId: number) => {
-  //   return messages.reduce((acc: { [key: string]: { first: Message; latest: Message } }, message) => {
-  //     const key = `${message.product_id}-${message.sender_id}-${message.receiver_id}`;
-  //     const reversedKey = `${message.product_id}-${message.receiver_id}-${message.sender_id}`;
-  
-  //     if (!acc[key] && !acc[reversedKey]) {
-  //       acc[key] = { first: message, latest: message };
-  //     } else {
-  //       if (acc[key]) {
-  //         acc[key].latest = new Date(message.updated_at) > new Date(acc[key].latest.updated_at) ? message : acc[key].latest;
-  //       }
-  //       if (acc[reversedKey]) {
-  //         acc[reversedKey].latest = new Date(message.updated_at) > new Date(acc[reversedKey].latest.updated_at) ? message : acc[reversedKey].latest;
-  //       }
-  //     }
-  //     return acc;
-  //   }, {});
-  // };
   
   const normalizeKeys = (obj: { [key: string]: any }) => {
     const normalizedObj: { [key: string]: any } = {};
@@ -440,8 +497,7 @@ useEffect(() => {
           console.error('No auth token found');
           return;
         }
-        
-        const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messageslistproduct', {
+        const response = await axios.get(`${BASE_URL}/api/messageslistproduct`, {
           params: { Id },
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -482,6 +538,7 @@ useEffect(() => {
         await AsyncStorage.setItem(`messages_${productId}`, JSON.stringify(groupedMessagesArray));
       } catch (error) {
         console.error('Error fetching messages:', error);
+
         Alert.alert('Error', 'Could not fetch messages.');
       } finally {
         setLoading(false);
@@ -546,7 +603,7 @@ useEffect(() => {
         console.error('No auth token found');
         return;
       }
-      const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/comments', {
+      const response = await axios.post(`${BASE_URL}/api/comments`, {
         product_id: productId,
         userId: newComment.userId,
         text: newComment.text,
@@ -609,7 +666,7 @@ useEffect(() => {
         return;
       }
 
-      const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/replies', {
+      const response = await axios.post(`${BASE_URL}/api/replies`, {
       comment_id: commentId,
       user_id: userId,
       reply: reply,
@@ -670,7 +727,7 @@ useEffect(() => {
       }
       
 
-      const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/replies_replies', {
+      const response = await axios.post(`${BASE_URL}/api/replies_replies`, {
       comment_id: commentId,
       replies_to: replyId,
       user_id: userId,
@@ -703,12 +760,16 @@ useEffect(() => {
       // await fetchReplies([commentId]);
       console.log('Reply submitted successfully!');
     } catch (error) {
-      console.error('Error submitting reply:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Error submitting reply:', error.response ? error.response.data : error.message);
+      } else {
+        console.error('Error submitting reply:', error);
+      }
     }
   };
 
 // Fetch replies for comments
-const fetchReplies = async (commentIDs: string[]) => {
+const fetchReplies = useCallback(async (commentIDs) => {
   try {
     const token = await AsyncStorage.getItem('authToken');
     if (!token) {
@@ -716,38 +777,30 @@ const fetchReplies = async (commentIDs: string[]) => {
       return;
     }
 
-    console.log('Fetching Replies for comments:', commentIDs);
-    const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/replies/${commentIDs}`, {
+    const response = await axios.get(`${BASE_URL}/api/replies/${commentIDs}`, {
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
-    // Check if the response is empty or if no replies were found
-    if (response.status === 404 || !response.data.replies || response.data.replies.length === 0) {
-      // Do nothing if no replies were found, as this is expected in some cases
-      return;
+    if (response.status === 404 || !response.data.replies) {
+      return; // No replies found
     }
 
-    // Process and group replies by comment ID if replies exist
-    const allRepliesByComment: { [key: string]: Replies[] } = {};
-    response.data.replies.forEach(reply => {
+    const groupedReplies = response.data.replies.reduce((acc, reply) => {
       const { comment_id } = reply;
-      if (!allRepliesByComment[comment_id]) {
-        allRepliesByComment[comment_id] = [];
-      }
-      allRepliesByComment[comment_id].push(reply);
-    });
+      if (!acc[comment_id]) acc[comment_id] = [];
+      acc[comment_id].push(reply);
+      return acc;
+    }, {});
 
-    setReplies(allRepliesByComment);
-    // console.log('Fetched and grouped Replies:', JSON.stringify(allRepliesByComment, null, 2)); // Log expanded data
+    setReplies(groupedReplies);
   } catch (err) {
-    // Log error only if it's a server error (status 500 or above)
     if (axios.isAxiosError(err) && err.response && err.response.status >= 500) {
       console.error('Server error while fetching replies:', err);
     }
   }
-};
+}, []);
 
 
 // Render the replies for each comment
@@ -786,41 +839,46 @@ const RenderReplies = ({ item }: { item: Replies }) => {
   return (
       <View>
           <View style={styles.replies}>
-              <View style={styles.commentheader}>
-                  <View> 
-                    
-                    <TouchableOpacity onPress={() => GotoCommentUserprofile(item.user?.id)}>            
-                      <Text style={styles.commentUser}> 
-                        <Text style={styles.userreplyName}> 
-                          {item.user?.Firstname || defaultUser.Firstname} {item.user?.Lastname || ''} 
-                        </Text> <Text style={styles.actionText}> ↪ replied to  </Text> 
-                      <Text style={styles.targetUser}> 
-                         { targetUserName}
-                      </Text> 
-                    </Text>
-                    </TouchableOpacity> 
-                      <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
-                          <Text style={{ color: 'black' }}>
-                              {beforeText}
-                              {hasValidLink ? (
-                                  <Text style={{ color: 'blue' }}>{productLink}</Text>
-                              ) : (
-                                  <Text>{productLink}</Text> // Display the text as normal if it's not a valid link
-                              )}
-                              {afterText}
-                          </Text>
-                      </TouchableOpacity>
-                  </View>
-                  {item.user_id !== null && item.user_id.toString() === user?.id?.toString() ? (
-                      <TouchableOpacity style={styles.replydelete} onPress={() => handleDeletereply(item.id)}>
-                          <Image source={icons.garbage} style={styles.replyicon} />
-                      </TouchableOpacity>
-                  ) : (
-                      <TouchableOpacity style={styles.replydelete} onPress={() => reportproductcomment(item.id)}>
-                          <Image source={icons.report} style={styles.replyicon} />
-                      </TouchableOpacity>
-                  )}
-              </View>
+          <View style={styles.commentheader}>
+  <View>
+    <TouchableOpacity onPress={() => GotoCommentUserprofile(item.user?.id)}>
+      <Text style={styles.commentUser}>
+        <Text style={styles.userreplyName}>
+          {item.user?.Firstname || defaultUser.Firstname} {item.user?.Lastname || ''}
+        </Text> 
+        <Text style={styles.actionText}> ↪ replied to </Text>
+        <Text style={styles.targetUser}>
+          {targetUserName}
+        </Text>
+      </Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
+      <Text style={{ color: 'black' }}>
+        {beforeText}
+        {hasValidLink ? (
+          <Text style={{ color: 'blue' }}>{productLink}</Text>
+        ) : (
+          <Text>{productLink}</Text> // Display the text as normal if it's not a valid link
+        )}
+        {afterText}
+      </Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={[styles.replyoptions, styles.fixedReply]}>
+    {item.user_id !== null && item.user_id.toString() === user?.id?.toString() ? (
+      <TouchableOpacity style={styles.replydelete} onPress={() => handleDeletereply(item.id)}>
+        <Image source={icons.garbage} style={styles.replyicon} />
+      </TouchableOpacity>
+    ) : (
+      <TouchableOpacity style={styles.replydelete} onPress={() => reportproductcomment(item.id)}>
+        <Image source={icons.report} style={styles.replyicon} />
+      </TouchableOpacity>
+    )}
+  </View>
+</View>
+
           </View>
           <View style={styles.undercomment}>
                 <Text style={styles.commentTime}>{timeSince(item.created_at)}</Text>
@@ -837,7 +895,7 @@ const RenderReplies = ({ item }: { item: Replies }) => {
                   <TextInput 
                     ref={replyInputRef1} 
                     value={reply1} 
-                    onChangeText={setReply1} 
+                    onChangeText={(text) => setReply1(text)} 
                     style={styles.replyInput} 
                     placeholder="Add a reply..." 
                     onFocus={handleReplyFocus1} 
@@ -932,7 +990,7 @@ const handleDelete = async (id: string | number) => {
               }
 
               // Send delete request to the server
-              const response = await axios.delete(`https://trusting-widely-goldfish.ngrok-free.app/api/comments/${id}`, {
+              const response = await axios.delete(`${BASE_URL}/api/comments/${id}`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
 
@@ -1011,7 +1069,7 @@ const handleDeletereply = async (id: string | number) => {
                 return; 
               } 
               
-              const response = await axios.delete(`https://trusting-widely-goldfish.ngrok-free.app/api/reply/${id}`, 
+              const response = await axios.delete(`${BASE_URL}/api/reply/${id}`, 
                 { 
                   headers: 
                   { 
@@ -1165,10 +1223,50 @@ const GotoCommentUserprofile = (id: any) => {
   }
 };
 
+
+const handleGoBack = () => { 
+  // console.log("Current Route:", route.name);
+  // console.log("Navigation State:", navigation.getState());
+  
+  const state = navigation.getState();
+
+  // Check if the stack has more than 1 route to go back
+  if (state.routes.length > 1) {
+    const lastRoute = state.routes[state.routes.length - 2]; // Get the last route in the stack before the current one
+
+    // Check if the last route is 'updateproduct'
+    if (lastRoute.name === 'updateproduct') {
+      // Find the first route in the stack that is not 'updateproduct' or 'ProductDetails'
+      const recentRoute = state.routes.slice().reverse().find(route => 
+        route.name !== 'updateproduct' && route.name !== 'ProductDetails' && route.name !== 'userproduct'
+      );
+
+      // If a valid recent route is found, navigate to it
+      if (recentRoute) {
+        navigation.navigate(recentRoute.name, recentRoute.params);
+      } else {
+        // If no valid recent route is found, navigate to (tabs) as the default
+        navigation.navigate('(tabs)');
+      }
+    } else {
+      // If not 'updateproduct', proceed with normal goBack
+      navigation.goBack();
+    }
+  }
+};
+
+const toggleModal = useCallback(() => {
+  setIssideModalVisible((prev) => !prev);
+}, []);
+
+useEffect(() => {
+  console.log('issideModalVisible changed:', issideModalVisible);
+}, [issideModalVisible]);
+
 const renderHeader = () => (
   <View>
    <View style={styles.header}>    
-  <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+  <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
     <Text style={styles.backButtonText}>Back</Text>
   </TouchableOpacity>
   <TouchableOpacity onPress={GotoUserprofile}>
@@ -1177,21 +1275,21 @@ const renderHeader = () => (
                 {product?.user.Firstname} {product?.user.Lastname}
             </Text>
             <View style={styles.stars}>
-                {[...Array(5)].map((_, index) => {
-                    const stars = index + 1; // 1 to 5
-                    return (
-                        <FontAwesome
-                            key={stars}
-                            name={stars <= Math.round(averageRating) ? 'star' : 'star-o'}
-                            size={22}
-                            color={stars <= Math.round(averageRating) ? '#FFC107' : '#E0E0E0'}
-                        />
-                    );
-                })}
-                <Text style={styles.averageRatingText}>
-                    {averageRating.toFixed(1)} {ratingCount > 0 ? `(${ratingCount})` : ''}
-                </Text>
-            </View>
+                            {[...Array(5)].map((_, index) => {
+                              const stars = index + 1; // 1 to 5
+                              return (
+                                <FontAwesome
+                                  key={stars}
+                                  name={stars <= Math.round(userRating) ? 'star' : 'star-o'}
+                                  size={22}
+                                  color={stars <= Math.round(userRating) ? '#FFC107' : '#E0E0E0'}
+                                />
+                              );
+                            })}
+                            <Text style={styles.averageRatingText}>
+                              {userRating.toFixed(1)} {averageRating > 0 ? `(${averageRating})` : ''}
+                            </Text>                  
+                        </View> 
         </View>
   </TouchableOpacity>
   <TouchableOpacity onPress={() => setReportModalVisible(true)}>
@@ -1219,12 +1317,13 @@ const renderHeader = () => (
         <Text style={styles.actionText}>Edit Product</Text>
       </TouchableOpacity>
         )}   
-        {product?.user_id?.toString() !== currentUserId?.toString() && ( 
-      <TouchableOpacity style={styles.actionContainer} onPress={reportproduct}>
-        <Image source={icons.report} style={styles.icon} resizeMode="contain" />
-        <Text style={styles.actionText}>Report Product</Text>
-      </TouchableOpacity>
-      )} 
+        {(product?.user_id?.toString() !== currentUserId?.toString() && 
+          (product?.quantity && parseInt(product?.quantity.replace(/[^0-9]/g, ''), 10) !== 0)) && (
+          <TouchableOpacity style={styles.actionContainer} onPress={reportproduct}>
+            <Image source={icons.report} style={styles.icon} resizeMode="contain" />
+            <Text style={styles.actionText}>Report Product</Text>
+          </TouchableOpacity>
+        )}
       <TouchableOpacity onPress={() => setReportModalVisible(false)}>
         <Text style={styles.reportcloseButton}>Close</Text>
       </TouchableOpacity>
@@ -1234,35 +1333,103 @@ const renderHeader = () => (
 
     <View style={styles.product}>
       <View style={styles.titlebar}>
+        <TouchableOpacity onPress={() => setStarModalVisible(true)}>
+        <View>
         <Text style={styles.title}>{product?.title}</Text>
+        <View style={styles.stars}>
+                {[...Array(5)].map((_, index) => {
+                    const stars = index + 1; // 1 to 5
+                    return (
+                        <FontAwesome
+                            key={stars}
+                            name={stars <= Math.round(productrating) ? 'star' : 'star-o'}
+                            size={22}
+                            color={stars <= Math.round(productrating) ? '#FFC107' : '#E0E0E0'}
+                        />
+                    );
+                })}
+                <Text style={styles.averageRatingText}>
+                    {productrating.toFixed(1)} {productratingcount > 0 ? `(${productratingcount})` : ''}
+                </Text>
+            </View>
+        </View>
+        </TouchableOpacity>
+
+        <ProductRaterModal
+          visible={starModalVisible}
+          onClose={() => setStarModalVisible(false)}
+          ratersData={productrater}
+        />
+
         <TouchableOpacity onPress={copyToClipboard}>
           <Text>Copy</Text>
         </TouchableOpacity>
       </View>
+      
+      {/* <SideModal
+            isVisible={issideModalVisible}
+            onClose={() => setIssideModalVisible(false)}
+            srpData={selectedCommodity ? [selectedCommodity] : []} // Pass selectedCommodity as an array
+          /> */}
+
+      <View style={styles.imagecontainer}>
       <TouchableOpacity onPress={() => setShowOriginalImage(!showOriginalImage)}>
         {loading ? (
           <ActivityIndicator size="large" color="#0000ff" style={styles.loadingIndicator} />
         ) : (
-          <Image source={imageUri ? { uri: imageUri } : undefined} style={styles.productImage} 
+          <ImageLoader imageUri={imageUri} style={styles.productImage} 
           onError={() => {
             console.log('Image failed to load');
-            setImageUri('image.empty'); // Set a fallback image URI
+            <Image 
+            source={icons.LoadingAgribid} 
+            style={styles.loadingicon}
+            resizeMode="contain" // Ensure the image fits within the circular container
+          /> 
           }} />
         )}
       </TouchableOpacity>
+      </View>
+      <View style={styles.productrow}>
         <View style={styles.productdetails}>
           <Text>{product?.description}</Text>
           <Text>Quantity: {product?.quantity}</Text>
           <Text>Price: {product?.price}</Text>
           <Text>Location: {product?.locate}</Text>
-        </View>   
+        </View>  
+        {product?.quantity && parseInt(product?.quantity.replace(/[^0-9]/g, ''), 10) === 0 ? (
+            <Image
+              source={icons.soldout}
+              style={styles.soldIcon}
+              resizeMode="contain"
+            />
+          ) : null}
+      {/* //       (
+      //      <TouchableOpacity style={styles.pullString} onPress={toggleModal}>
+      //        <Image 
+      //          source={icons.srptag2} 
+      //          style={{ width: 90, height: 60, tintColor: 'green', zIndex: 1 }}
+      //         />
+      //    <View style={styles.pullStringHandle} />
+      // </TouchableOpacity>
+      //     )} */}
+        </View> 
         <View style={styles.messagebar}>
-          <TouchableOpacity style={styles.message} onPress={handlePress}>
+          <TouchableOpacity
+            style={[styles.message, 
+              (product?.user_id?.toString() !== currentUserId?.toString() && 
+              (product?.quantity && parseInt(product?.quantity.replace(/[^0-9]/g, ''), 10) === 0)) && styles.disabledButton
+            ]}
+            onPress={handlePress}
+            disabled={product?.user_id?.toString() !== currentUserId?.toString() && 
+              (product?.quantity && parseInt(product?.quantity.replace(/[^0-9]/g, ''), 10) === 0) ? true : false}
+          >
             <Text style={styles.messageText}>Message</Text>
           </TouchableOpacity>
+          
           {product?.user_id?.toString() === currentUserId?.toString() && (
             <View style={styles.totalMessageContainer}>
               <Image source={icons.contact} style={styles.icon} resizeMode="contain" />
+              <UnreadMessagesNotification />
               <Text style={styles.totalMessage}>messages: {totalmessage}</Text>
             </View>
           )}
@@ -1275,7 +1442,7 @@ const renderHeader = () => (
 return (
   <SafeAreaView style={styles.container}>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 30}>
       
       <KeyboardAwareFlatList
          data={(comments ?? []).slice().reverse()} 
@@ -1286,7 +1453,7 @@ return (
             <Text>No comments yet</Text>
           </View>
         )}
-        renderItem={({ item }) => {
+        renderItem = {({ item }) => {
           const productPrefix = '@product/';
   
           // Find the index of `@product/` in the text
@@ -1307,37 +1474,42 @@ return (
           return (
             <View>
               <View style={styles.comment}>
-                <View style={styles.commentheader}>
-                  <View>
-                   <TouchableOpacity onPress={() => GotoCommentUserprofile(item.user.id)}>
-                    <Text style={styles.commentUser}>{item.user?.Firstname || defaultUser.Firstname} {item.user?.Lastname}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
-                      <Text style={{ color: 'black' }}>
-                        {beforeText}
-                        {hasValidLink ? (
-                          <Text style={{ color: 'blue' }}>
-                            {productLink}
-                          </Text>
-                        ) : (
-                          productLink // Display the text as normal if it's not a valid link
-                        )}
-                        {afterText}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  {item.userId !== null && item.userId.toString() === user?.id?.toString() ? (
-                    // Show delete icon if item.userId matches user.id
-                    <TouchableOpacity style={styles.delete} onPress={() => handleDelete(item.id)}>
-                      <Image source={icons.garbage} style={styles.icon} />
-                    </TouchableOpacity>
-                  ) : (
-                    // Show report icon if item.userId does not match user.id
-                    <TouchableOpacity style={styles.delete} onPress={() => reportproductcomment(item.id)}>
-                      <Image source={icons.report} style={styles.icon} />
-                    </TouchableOpacity>
-                  )}
-                </View>
+              <View style={styles.commentheader}>
+    <View>
+      <TouchableOpacity onPress={() => GotoCommentUserprofile(item.user.id)}>
+        <Text style={styles.commentUser}>
+          {item.user?.Firstname || defaultUser.Firstname} {item.user?.Lastname}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
+        <Text style={{ color: 'black' }}>
+          {beforeText}
+          {hasValidLink ? (
+            <Text style={{ color: 'blue' }}>{productLink}</Text>
+          ) : (
+            productLink // Display the text as normal if it's not a valid link
+          )}
+          {afterText}
+        </Text>
+      </TouchableOpacity>
+    </View>
+
+    <View style={[styles.options, styles.fixedOptions]}>
+      {item.userId !== null && item.userId.toString() === user?.id?.toString() ? (
+        // Show delete icon if item.userId matches user.id
+        <TouchableOpacity style={styles.delete} onPress={() => handleDelete(item.id)}>
+          <Image source={icons.garbage} style={styles.icon} />
+        </TouchableOpacity>
+      ) : (
+        // Show report icon if item.userId does not match user.id
+        <TouchableOpacity style={styles.delete} onPress={() => reportproductcomment(item.id)}>
+          <Image source={icons.report} style={styles.icon} />
+        </TouchableOpacity>
+      )}
+    </View>
+  </View>
+
               </View>
               <View style={styles.undercomment}>
                 <Text style={styles.commentTime}>{timeSince(item.created_at)}</Text>
@@ -1363,7 +1535,7 @@ return (
                       <TextInput
                           ref={replyInputRef} 
                           value={reply}
-                          onChangeText={setReply}
+                          onChangeText={(text) => setReply(text)}
                           style={styles.replyInput}
                           placeholder="Add a reply..."
                           onFocus={handleReplyFocus}
@@ -1390,7 +1562,7 @@ return (
           {loading ? (
             <ActivityIndicator size="large" color="#0000ff" style={styles.loadingIndicator} />
           ) : (
-            <Image source={{ uri: imageUri || '' }} style={styles.originalImage} onError={() => console.log('Image failed to load')} defaultSource={require('../assets/images/empty.png')} />
+            <ImageLoader imageUri={imageUri} style={styles.originalImage} onError={() => console.log('Image failed to load')} defaultSource={require('../assets/images/empty.png')} />
           )}
           <TouchableOpacity style={styles.closeButton} onPress={() => setShowOriginalImage(false)}>
             <Text style={styles.closeText}>&times;</Text>
@@ -1444,22 +1616,22 @@ return (
 </Modal>
 
  {/* Input for new comment*/}
- <View style={[styles.inputContainer]}>
-        <TextInput
-          value={comment}
-          onChangeText={setComment}
-          placeholder={"Add a comment..."}
-          style={styles.commentInput}
-          onFocus={handleCommentFocus}
-          onBlur={() => setFocusedInput(null)}
-        />
-          <TouchableOpacity style={styles.sendButton} onPress={handleCommentSubmit}>
-            <Image
-              source={icons.send} // Local icon path
-              style={styles.icon} // Add your icon styling here
-            />
-          </TouchableOpacity>
-        </View>
+<View style={[styles.inputContainer]}>
+  <TextInput
+    value={comment}
+    onChangeText={(text) => setComment(text)}
+    placeholder={"Add a comment..."}
+    style={styles.commentInput}
+    onFocus={handleCommentFocus}
+    onBlur={() => setFocusedInput(null)}
+  />
+  <TouchableOpacity style={styles.sendButton} onPress={handleCommentSubmit}>
+    <Image
+      source={icons.send} // Local icon path
+      style={styles.icon} // Add your icon styling here
+    />
+  </TouchableOpacity>
+</View>
     </KeyboardAvoidingView>
   </SafeAreaView>
 );
@@ -1533,7 +1705,7 @@ stars: {
     elevation: 1,
     marginBottom: 5,
     width: '100%', // Set width as percentage to adapt to screen width
-    maxWidth: 350, // Optional max width for larger screens
+    maxWidth: 500, // Optional max width for larger screens
     alignSelf: 'center', // Center align on screen
   },
 
@@ -1552,6 +1724,10 @@ stars: {
   productdetails: {
     flex: 1, // Allow this section to take up available space
     padding: 10, // Increase padding for a more spacious look
+   
+  },
+  productrow: {
+    flexDirection: 'row', 
     borderWidth: 1, // Add a border to outline the comment box
     borderColor: '#ddd', // Use a subtle light gray for the border
     borderTopLeftRadius: 5, // Round top left corner
@@ -1565,6 +1741,31 @@ stars: {
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 1, 
+    alignItems: 'center',
+  },
+  soldIcon: {
+    width: 80, // Set width for the menu icon
+    height: 80, // Set height for the menu icon
+    tintColor: '#000', // Change color if needed
+  },
+  pullString: {
+    position: 'absolute',
+    top: '65%',
+    right: -15,
+    width: 70,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // backgroundColor: '#ccc',
+    borderTopLeftRadius: 15,
+    borderBottomLeftRadius: 15,
+    zIndex: 9999,
+  },
+  pullStringHandle: {
+    width: 10,
+    height: 30,
+    backgroundColor: '#888',
+    borderRadius: 5,
   },
   titlebar: {
     flexDirection: 'row',
@@ -1576,10 +1777,24 @@ stars: {
     fontSize: 24,
     fontWeight: 'bold',
   },
+  imagecontainer: {
+    width: screenWidth * 0.95,
+    height: screenHeight * 0.23,
+    maxHeight: 300,
+    marginRight: 5,
+    alignItems: 'center',         // Ensure image content is centered
+  },
   productImage: {
-    width: '100%',
+    width: screenWidth * 1,
     height: 200,
     resizeMode: 'cover',
+    padding: 10,
+  },
+  loadingicon: {
+    width: 80,
+    height: 80,
+    borderRadius: 5,
+    marginRight: 10,
   },
   overlay: {
     flex: 1,
@@ -1663,6 +1878,9 @@ stars: {
     paddingVertical: 5,
     borderRadius: 15,
   },
+  disabledButton: {
+    opacity: 0.5,  // Makes the button look inactive
+  },
   message: {
     backgroundColor: '#28a745',  // Darker green for a modern look
     borderRadius: 20,
@@ -1718,11 +1936,12 @@ stars: {
     shadowRadius: 2,
     elevation: 1,
     width: screenWidth * 0.95, // 95% of screen width for responsiveness
-    alignSelf: 'center',
+    alignSelf: 'center', // Centers the comment container horizontally
     marginVertical: 5,
-    flexDirection: 'row', // Make sure the comment layout is in a row
-    justifyContent: 'space-between', // Ensure space between comment and the icon
-    alignItems: 'center', // Align items in the center vertically
+    flexDirection: 'row', // Arrange items in a row (for text and delete icon)
+    justifyContent: 'space-between', // Space between text content and delete icon
+    alignItems: 'center', // Vertically align the items in the container
+    position: 'relative', // Ensure child elements like the delete icon are positioned relative to this container
   },
   
   commentUser: {
@@ -1746,9 +1965,10 @@ stars: {
     width: screenWidth * 0.9, // 95% of screen width for responsiveness
     alignSelf: 'center',
     marginVertical: 5,
-    flexDirection: 'row', // Make sure the comment layout is in a row
-    justifyContent: 'space-between', // Ensure space between comment and the icon
-    alignItems: 'center', // Align items in the center vertically
+    flexDirection: 'row', // Arrange items in a row (for text and delete icon)
+    justifyContent: 'space-between', // Space between text content and delete icon
+    alignItems: 'center', // Vertically align the items in the container
+    position: 'relative', // Ensure child elements like the delete icon are positioned relative to this container
   },
   targetUser: {
     fontWeight: 'bold',
@@ -1767,6 +1987,7 @@ stars: {
     flexDirection: 'row',  // Arrange content in a row
     justifyContent: 'space-between',  // Push the text to the left and button to the right
     alignItems: 'center',  // Vertically center the content
+    position: 'relative',
   },
   commentInput: {
     height: 50,
@@ -1849,19 +2070,41 @@ stars: {
     fontSize: 18,
     fontWeight: 'bold', // Bold font for emphasis
   },
+  options: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',  // Align to the right
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  fixedOptions: {
+    position: 'absolute',  // Fix the position of the options (delete/report) at the bottom-right
+    bottom: 10,  // Position options at the bottom of the screen
+    right: '8%',   // Align to the right edge
+    width: '90%', // Adjust the width if necessary
+    zIndex: 999,  // Ensure the options appear above other elements
+  },
+  
+  delete: {
+    position: 'absolute', // Absolutely position the icon inside the options container
+  },  
+  replyoptions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  fixedReply: {
+    position: 'absolute',  // Fixed position to keep it at the bottom of the screen
+    bottom: 10, // Ensure it's placed just above the bottom of the screen
+    right: '10%',  // Align to the right
+    width: '90%', // Adjust the width if needed
+    zIndex: 999, // Ensure it appears on top of other content
+  },
+  
+  replydelete: {
+    position: 'absolute', // Absolutely position the icon inside the options container
+  },
 
-  delete: {   
-      position: 'absolute',  // Position the icon absolutely within the comment container
-      right: 23,             // Set right margin to give some space from the right edge
-      top: '50%',            // Center vertically within the comment container
-      transform: [{ translateY: -12 }], // Offset by half the icon height to perfectly center it
-  },
-  replydelete: { 
-     position: 'absolute',  // Position the icon absolutely within the comment container
-      right: 27,             // Set right margin to give some space from the right edge
-      top: '50%',            // Center vertically within the comment container
-      transform: [{ translateY: -12 }], // Offset by half the icon height to perfectly center it
-  },
   icon: {
     width: 24, // Adjust based on your icon size
     height: 24, // Adjust based on your icon size

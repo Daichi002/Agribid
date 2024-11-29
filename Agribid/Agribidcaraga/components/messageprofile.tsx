@@ -1,5 +1,6 @@
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native'
 import React, { useEffect, useState } from 'react'
+import BASE_URL from '../components/ApiConfig';
 
 interface ProductItemProps {
     item: {
@@ -23,7 +24,7 @@ const RenderProductMessages: React.FC<ProductItemProps>  = ({ item }) => {
   
     useEffect(() => {
       const loadImage = async () => {
-        const uri = `http://10.0.2.2:8000/storage/product/images/${item.image}`;
+        const uri = `${BASE_URL}/storage/product/images/${item.image}`;
         const cachedUri = await cacheImage(uri);
         setImageUri(cachedUri);
         setLoading(false);
@@ -98,3 +99,4 @@ productdetails: {
     color: '#AAA',
   },
 });
+

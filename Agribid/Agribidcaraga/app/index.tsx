@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import 'react-native-gesture-handler';
+import BASE_URL from '../components/ApiConfig';
 
 import { icons } from "../constants";
 const { width: screenWidth } = Dimensions.get('window');
@@ -32,26 +32,6 @@ const HomeScreen = () => {
     navigation.navigate("(auth)/login");
     // navigation.navigate("verifynumber");
   });
-
-  // for debugging only //comment when done
-    useEffect(() => {
-      const checkToken = async () => {
-        try {
-          const token = await AsyncStorage.getItem('authToken');
-          if (token) {
-            navigation.navigate('(tabs)');
-          } else {
-            console.log('Token not found, navigate to login or onboarding');
-            // navigation.navigate('Login'); // Example, navigate to login if token is not found
-          }
-        } catch (error) {
-          console.error('Failed to check token', error);
-        }
-      };
-  
-      checkToken();
-    }, [navigation]);
-
 
   // Function to automatically rotate images
   useEffect(() => {
@@ -113,6 +93,10 @@ const HomeScreen = () => {
         <TouchableOpacity style={styles.button} onPress={handlenavtologin}>
           <Text style={styles.buttonText}>Get Started</Text>
         </TouchableOpacity>
+
+        <View style={styles.footercontainer}> 
+        <Text style={styles.footerText}>Made with ♥ by Brix Jay A. Nucos BSIS</Text> 
+      </View>
 
         {/* for debugging only  remove after */}
         {/* <TouchableOpacity style={styles.button} onPress={handlenavtohome}>
@@ -208,6 +192,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
+  footercontainer: { 
+    flex: 1, 
+    justifyContent: 'flex-end', 
+    alignItems: 'center', 
+    paddingBottom: 20, // Adjust padding as needed 
+    }, 
+  footerText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+  }, 
 });
 
 

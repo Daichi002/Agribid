@@ -11,6 +11,7 @@ import Pusher from 'pusher-js/react-native';
 import { icons } from "../../constants";
 import { images } from "../../constants";
 import { useFocusEffect } from '@react-navigation/native';
+import BASE_URL from '../../components/ApiConfig';
 
 interface Message {
   id: never;
@@ -82,7 +83,7 @@ const RenderMessage: React.FC<RenderMessageProps> = React.memo(({ item, currentU
     if (uri && (uri.endsWith('.jpg') || uri.endsWith('.jpeg') || uri.endsWith('.png') || uri.endsWith('.gif'))) {
       // Construct full URL if needed
       if (!uri.startsWith('http')) {
-        uri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}`;
+        uri = `${BASE_URL}/storage/message/images/${uri}`;
       }
   
       setLoading(true);
@@ -216,7 +217,7 @@ interface SendMessageParams {
   // Function to set image URI and open modal
   const OriginalImage = async (uri: string) => {
     // Construct the full image URI
-    const fullUri = `https://trusting-widely-goldfish.ngrok-free.app/storage/message/images/${uri}?${new Date().getTime()}`;
+    const fullUri = `${BASE_URL}/storage/message/images/${uri}?${new Date().getTime()}`;
     console.log('Image URI:', fullUri); // Log the image URI for debugging
 
     await loadImage(fullUri); // Load the image
@@ -324,7 +325,7 @@ useEffect(() => {
           sessions: sessions // Assuming sessionId is available in the scope
         };
   
-        const response = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/getmessages', {
+        const response = await axios.get(`${BASE_URL}/api/getmessages`, {
           params,
           headers: { Authorization: `Bearer ${token}` },
           timeout: 10000,
@@ -478,7 +479,7 @@ useEffect(() => {
     
         // console.log('message data', productId, senderId, receiverId, sessions);
     
-        const responseCheck = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/session', {
+        const responseCheck = await axios.get(`${BASE_URL}/api/messages/session`, {
           params: {
             product_id: productId,
             sender_id: senderId,
@@ -489,7 +490,7 @@ useEffect(() => {
     
         let session = responseCheck.data.session;
         if (!session) {
-          const responseMaxSession = await axios.get('https://trusting-widely-goldfish.ngrok-free.app/api/messages/max-session', {
+          const responseMaxSession = await axios.get(`${BASE_URL}/api/messages/max-session`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           session = responseMaxSession.data.maxSession + 1;
@@ -499,7 +500,7 @@ useEffect(() => {
     
         // console.log('Final message data to send:', formData);
     
-        const response = await axios.post('https://trusting-widely-goldfish.ngrok-free.app/api/messages', formData, {
+        const response = await axios.post(`${BASE_URL}/api/messages`, formData, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',
@@ -613,7 +614,7 @@ useEffect(() => {
           return;
         }
   
-        const response = await axios.get(`https://trusting-widely-goldfish.ngrok-free.app/api/receiver/${senderId}`, {
+        const response = await axios.get(`${BASE_URL}/api/receiver/${senderId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
