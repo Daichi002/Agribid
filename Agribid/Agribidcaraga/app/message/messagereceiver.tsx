@@ -228,7 +228,7 @@ interface SendMessageParams {
 
   // Listen to messages from Pusher
 useEffect(() => {
-  const pusher = new Pusher('87916f2c03247f41316e', {
+  const pusher = new Pusher(' //', {
     cluster: 'ap1',
   });
 
