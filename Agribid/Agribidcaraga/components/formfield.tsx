@@ -83,7 +83,7 @@ export default FormField;
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 8, // Adjust space between fields
+    marginBottom: 5, // Adjust space between fields
     
   },
   title: {

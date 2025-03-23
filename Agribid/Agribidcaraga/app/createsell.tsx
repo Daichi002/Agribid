@@ -22,7 +22,7 @@ import { useAlert } from '../components/AlertContext';
 import ProtectedRoute from '../components/ProtectedRoute';
 import BASE_URL from '../components/ApiConfig';
 import SideModal from '../components/sidemodal';
-import  useGlow  from '../components/GlowingImage';
+import { GlowProvider, GlowingImage, useGlow } from '../components/Glowingmanager';
 
 
 interface Barangay {
@@ -96,7 +96,7 @@ const Createsell = () => {
   const [filteredCommodities, setFilteredCommodities] = useState<string[]>([]);
   const [selectedCommodity, setSelectedCommodity] = useState<any | null>(null);
   const priceRange = selectedCommodity ? selectedCommodity.price_range : null;
-  const { setGlow } = useGlow();
+  // const { setGlow } = useGlow();
 
   const [error, setError] = useState('');
   const [title, setTitle] = useState("");
@@ -251,7 +251,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
       // Prevent input if it exceeds the min or max price
       if (maxPrice === 0 || isNaN(input) || input <= maxPrice) {
         setPrice(numericValue); // Update the price if within the allowed range
-        validatePrice(numericValue); // Validate after updating the price
+        validatePrice({ inputPrice: numericValue }); // Validate after updating the price
       } else {
         // Optional: set an error message or handle invalid input
         setError(`Price must be between ${minPrice} and ${maxPrice || 'no upper limit'}.`);
@@ -274,7 +274,11 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   //   }
   // };
 
-  const validatePrice = (inputPrice) => {
+  interface ValidatePriceProps {
+    inputPrice: string;
+  }
+
+  const validatePrice = ({ inputPrice }: ValidatePriceProps): void => {
     const input = parseFloat(inputPrice);
     if (inputPrice && !isNaN(input)) {
       if (input < minPrice || (maxPrice && input > maxPrice)) {
@@ -373,11 +377,11 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
     // Validate price range
   if (parseFloat(price) < minPrice) {
     Alert.alert("Error", `Price must not be less than ${minPrice.toFixed(2)}.`);
-    setGlow(true);
+    // setGlow(true);
     return; // Stop execution if price is invalid
   } else if (maxPrice !== 0 && parseFloat(price) > maxPrice) {
     Alert.alert("Error", `Price must not exceed ${maxPrice.toFixed(2)}.`);
-    setGlow(true);
+    // setGlow(true);
     return; // Stop execution if price is invalid
   }
   
@@ -502,18 +506,19 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
   
         // Extract only the commodity names
         const commodityNames = response.data.commodities.map(
-          (item) => item.commodity
+          (item: { commodity: any; }) => item.commodity
         );
         
         // Update the filtered commodities list
         setFilteredCommodities(commodityNames);
       } else {
         console.error("Commodities data is not an array:", response.data.commodities);
-        setSrpData([]);
+        setSrpData(null);
         setFilteredCommodities([]); // Set to empty array if data is invalid
       }
     } catch (error) {
-      console.error("Error fetching SRP:", error);
+      showAlert('NO Available SRP!', 3000, 'red');
+      // console.error("Error fetching SRP:", error);
       setFilteredCommodities([]); // Set to empty array in case of error
     }
   };
@@ -587,56 +592,60 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
 
       {/* Commodity Picker */}
       {category && (
-      <>
-<Text style={styles.label}>Commodity*</Text>
-<View
-  style={[styles.pickerContainer, errors.commodities ? styles.errorInput : {}]}
->
-  <Picker
-    selectedValue={commodities}
-    onValueChange={(itemValue) => {
-      console.log("Selected Commodity:", itemValue);
+  <>
+    <Text style={styles.label}>Commodity*</Text>
+    <View
+      style={[styles.pickerContainer, errors.commodities ? styles.errorInput : {}]}
+    >
+      <Picker
+        selectedValue={commodities}
+        onValueChange={(itemValue) => {
+          console.log("Selected Commodity:", itemValue);
 
-      // Update selected commodity in state
-      setCommodities(itemValue); // Set the selected commodity
+          // Update selected commodity in state
+          setCommodities(itemValue); // Set the selected commodity
 
-      // Clear error message for the commodity field
-      setErrors((prevErrors) => ({
-        ...prevErrors,
-        commodities: "",
-      }));
+          // Clear error message for the commodity field
+          setErrors((prevErrors) => ({
+            ...prevErrors,
+            commodities: "",
+          }));
 
-      // Ensure srpData is available and not empty
-      if (srpData && Array.isArray(srpData.commodities)) {
-        const selectedCommodityData = srpData.commodities.find(
-          (item) => item.commodity === itemValue
-        );
-        // console.log("SRP Data after update:", srpData);
+          // Ensure srpData is available and not empty
+          if (srpData && Array.isArray(srpData.commodities)) {
+            const selectedCommodityData = srpData.commodities.find(
+              (item) => item.commodity === itemValue
+            );
 
-        if (selectedCommodityData) {
-          setSelectedCommodity(selectedCommodityData); // Set the selected commodity for further use
-        }else {
-          console.error("Selected commodity not found in srpData.");
-        }
-      } else {
-        console.error("SRP data or commodities is not available.");
-      }
-    }}
-    style={[styles.picker, { borderWidth: 1, borderColor: "#bdc8d6", borderRadius: 5 }]}
-  >
-    <Picker.Item label="Select a Commodity" value="" />
-    {filteredCommodities.length > 0 ? (
-      filteredCommodities.map((commodity, index) => (
-        <Picker.Item key={index} label={commodity} value={commodity} />
-      ))
-    ) : (
-      <Picker.Item label="No commodities available" value="" />
-    )}
-  </Picker>
-</View>
+            if (selectedCommodityData) {
+              setSelectedCommodity(selectedCommodityData); // Set the selected commodity for further use
+            } else if (itemValue === "Others") {
+              console.log("User selected 'Others'. Handle accordingly.");
+              setSelectedCommodity(null); // Clear selected commodity if 'Others' is selected
+            } else {
+              console.error("Selected commodity not found in srpData.");
+            }
+          } else {
+            console.error("SRP data or commodities is not available.");
+          }
+        }}
+        style={[styles.picker, { borderWidth: 1, borderColor: "#bdc8d6", borderRadius: 5 }]}
+      >
+        <Picker.Item label="Select a Commodity" value="" />
+        {filteredCommodities.length > 0 ? (
+          filteredCommodities.map((commodity, index) => (
+            <Picker.Item key={index} label={commodity} value={commodity} />
+          ))
+        ) : (
+          <Picker.Item label="No commodities available" value="" />
+        )}
+        {/* Add 'Others' as a static choice */}
+        <Picker.Item label="Others" value="Others" />
+      </Picker>
+    </View>
+  </>
+)}
 
-        </>
-      )}
 
 
           <Text style={styles.label}>Description Optional</Text>
@@ -646,6 +655,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
             value={description}
             onChangeText={setDescription}
             placeholder="Description"
+            maxLength={100}
           />
 
           <Text style={styles.label}>Quantity*</Text>
@@ -698,8 +708,9 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
 
 
 
-
+          
           <Text style={styles.label}>Price*</Text>
+          {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
           <TextInput
             style={[styles.input, errors.price ? styles.errorInput : {}]}
             value={price}
@@ -708,7 +719,7 @@ const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
             keyboardType="decimal-pad" // Use decimal pad to input decimals
             maxLength={8} // Limit to 6 characters (can be adjusted based on your needs)
           />
-          {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
+          
 
 
       <Text style={styles.label}>Location*</Text>

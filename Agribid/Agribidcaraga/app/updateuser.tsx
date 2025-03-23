@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   container:{
-     marginTop: '30%',
+    marginVertical: '20%',
   },
   profileheaderText: {
     marginTop: 10,
@@ -384,22 +384,25 @@ const styles = StyleSheet.create({
     bottom: 0, // Make it stretch to the full height
     backgroundColor: '#f5f5f5', // Match the background color of the input
     justifyContent: 'center', // Vertically center the country code text
-    paddingHorizontal: 10, // Add padding to ensure the text is not too close to the edge
+    // paddingHorizontal: 10, // Add padding to ensure the text is not too close to the edge
   },
   
   countryCode: {
     fontSize: 19,
     textAlign: 'center',
     color: '#1F1F1F', // Black text color
-    width: 40, // Width for the country code container
+    width: 50, // Width for the country code container
   },
   
   numberinput: {
-    flex: 1,
+    flex: 1, // Take up the remaining space
     padding: 10,
-    paddingLeft: 50, // Add padding to prevent text from overlapping the country code
+    paddingLeft: 45, // Add padding to prevent text from overlapping the country code
     fontSize: 19,
+    bottom: 1,
     height: '100%', // Ensure the input takes full height
+    justifyContent: 'center', // Vertically center the text
+    position: 'absolute', // Position relative to allow absolute positioning of the country cod
   },  
   input: {
     borderWidth: 1,

@@ -876,7 +876,7 @@ const decreaseOffer = () => {
       >
         <View style={styles.OfferModalContainer}>
           <View style={styles.OfferModalContent}>
-            <Text style={styles.OfferModalTitle}>Create Offer</Text>
+            <Text style={styles.OfferModalTitle}>Place Offer</Text>
 
             <View style={styles.offerContainer}>
             {offeredproduct && (
@@ -885,7 +885,7 @@ const decreaseOffer = () => {
             </View>
 
             {/* Offer Input */}
-            <Text>Offer Quantity</Text>
+            <Text>Purchase Quantity</Text>
               {promoMessage && <Text style={styles.promoMessage}>{promoMessage}</Text>}
               <View style={styles.offerinputContainer}>
               <TouchableOpacity style={styles.arrowButton} onPress={decreaseOffer}>
@@ -966,7 +966,9 @@ const decreaseOffer = () => {
         </View>
       </Modal>
 
-    {loading ? <Text>Loading...</Text> : 
+    {loading ? <View style={styles.container}>
+      <Text style={styles.loadingText}>Loading...</Text>
+    </View> : 
   <FlatList
     ref={flatListRef}
     data={messages}
@@ -1082,6 +1084,18 @@ backicon: {
 
 },
 
+container: {
+  flex: 1, // Takes the full screen
+  justifyContent: 'center', // Centers vertically
+  alignItems: 'center', // Centers horizontally
+  backgroundColor: '#B4CBB7', // Optional: Add a background color
+},
+loadingText: {
+  fontSize: 18, // Adjust font size
+  fontWeight: 'bold', // Optional: Make the text bold
+  color: '#333', // Adjust text color
+},
+
 header: {
   height: 70,
   width: '100%',
@@ -1092,6 +1106,8 @@ header: {
   flexDirection: 'row',
   alignItems: 'center',
 },
+
+
 
 receiverNameheader: {
   flex: 1, // Allow the name to take up available space

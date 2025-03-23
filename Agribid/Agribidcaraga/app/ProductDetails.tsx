@@ -10,6 +10,7 @@ import axios from 'axios';
 import { FontAwesome } from '@expo/vector-icons';
 
 import ProductRaterModal from '../components/ProductRaterModal';
+import { images } from "../constants";
 import { icons } from "../constants";
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
@@ -54,7 +55,17 @@ interface Replies {
   user_id: string;
   reply: string;
   user: User;
-  replies_to: Replies | null;
+  parent_reply: RepliesTo | null;
+  created_at: string; 
+}
+
+interface RepliesTo {
+  id: string; 
+  text: string;
+  comment_id: Comment;
+  user_id: string;
+  reply: string;
+  user: User;
   created_at: string; 
 }
 
@@ -107,56 +118,71 @@ interface Rate {
   review: string | null;
 }
 
+
 // Simple image cache
 const imageCache: { [key: string]: string } = {};
 
 interface ImageLoaderProps {
   imageUri: string; // Can be either product?.image or item.image
   style?: ImageStyle; // Optional custom styles passed from the parent
+  onError?: () => void; // Optional error handler
 }
 
-const ImageLoader: React.FC<ImageLoaderProps> = ({ imageUri, style }) => {
-  const [loading, setLoading] = useState(true);
+const ImageLoader: React.FC<ImageLoaderProps> = ({ imageUri, style, onError }) => {
+  const [loadingimage, setLoadingimage] = useState(true);
   const [uri, setUri] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const [prevUri, setPrevUri] = useState<string | null>(null); // Keep track of the previous imageUri
 
   useEffect(() => {
-    const loadImage = async () => {
-      const fullUri = `${BASE_URL}/storage/product/images/${imageUri}`;
-      setLoading(true);
-      setError(false);
+    if (imageUri === prevUri) {
+      console.log('Image URI is the same, skipping reload');
+      return;
+    }
 
-      try {
-        // Check if URI is already cached
-        if (imageCache[fullUri]) {
-          setUri(imageCache[fullUri]);
-        } else {
-          const filename = fullUri.split('/').pop();
-          const fileUri = `${FileSystem.documentDirectory}${filename}`;
-          const info = await FileSystem.getInfoAsync(fileUri);
+    setPrevUri(imageUri); // Update the previous URI
+    loadImage(imageUri); // Load the new image URI
+    console.log('Image URI changed:', imageUri);
+  }, [imageUri]); // Only rerun if imageUri changes
 
-          if (info.exists) {
-            imageCache[fullUri] = fileUri;
-            setUri(fileUri);
-          } else {
-            // Download the image if it isn't locally available
-            const response = await FileSystem.downloadAsync(fullUri, fileUri);
-            imageCache[fullUri] = response.uri;
-            setUri(response.uri);
-          }
-        }
-      } catch (e) {
-        console.error('Error loading image:', e);
-        setError(true);
-      } finally {
-        setLoading(false);
+  const loadImage = async (imageUri: string) => {
+    const fullUri = `${BASE_URL}/storage/product/images/${imageUri}`;
+
+    // Check if the image is already cached
+    if (imageCache[fullUri]) {
+      setUri(imageCache[fullUri]);
+      setLoadingimage(false);
+      return;
+    }
+
+    setLoadingimage(true);
+    setError(false);
+
+    try {
+      const filename = fullUri.split('/').pop();
+      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+      const info = await FileSystem.getInfoAsync(fileUri);
+
+      if (info.exists) {
+        // Cache the locally available image
+        imageCache[fullUri] = fileUri;
+        setUri(fileUri);
+      } else {
+        // Download the image if it isn't locally available
+        const response = await FileSystem.downloadAsync(fullUri, fileUri);
+        imageCache[fullUri] = response.uri;
+        setUri(response.uri);
       }
-    };
+    } catch (e) {
+      console.error('Error loading image:', e);
+      setError(true);
+      if (onError) onError(); // Trigger the error handler if provided
+    } finally {
+      setLoadingimage(false);
+    }
+  };
 
-    loadImage();
-  }, [imageUri]); // Trigger whenever imageUri changes
-
-  if (loading) {
+  if (loadingimage) {
     return (
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#0000ff" />
@@ -172,17 +198,13 @@ const ImageLoader: React.FC<ImageLoaderProps> = ({ imageUri, style }) => {
     );
   }
 
-  return (
-    uri ? (
-      <Image
-        source={{ uri }}
-        style={[{ resizeMode: 'cover' }, style]} // Allow custom styles to override default styles
-      />
-    ) : null
-  );
+  return uri ? (
+    <Image
+      source={uri ? { uri } : images.Agribid} // Use a fallback image if uri is null
+      style={[{ resizeMode: 'cover' }, style]} // Allow custom styles to override default styles
+    />
+  ) : null;
 };
-
-
 
 
 
@@ -193,7 +215,7 @@ const ProductDetails = () => {
   const [srpData, setSrpData] = useState<{ commodities: Array<any> } | null>(null);
   const [selectedCommodity, setSelectedCommodity] = useState<any | null>(null);
   const [product, setProduct] = useState<product | null>(null);
-  const imageUri = product?.image; 
+  const [productimage, setproductimage] = useState();
   const [productrating, setProductsRating] = useState(0);
   const [productratingcount, setPdoductRatingCount] = useState(0);
   const [productrater, setProductrater] = useState<Rate[]>([]);  // Use Rate[] instead of [Rate]
@@ -201,6 +223,12 @@ const ProductDetails = () => {
   const [averageRating, setAverageRating] = useState(0);
   const { productId, from } = useLocalSearchParams();
   const [loading, setLoading] = useState(true);
+
+  const [uri, setUri] = useState<string | null>(null);
+  const [loadingimage, setLoadingimage] = useState(true);
+  const [error, setError] = useState(false);
+
+  
   const [messageList, setMessageList] = useState<{ first: Message; latest: Message }[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [totalmessage, setTotalmessage] = useState(0);
@@ -226,6 +254,47 @@ const ProductDetails = () => {
   const [comments, setComments] = useState<Comment[]>();
   const [user, setUser] = useState<User | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  const fullUri = `${BASE_URL}/storage/product/images/${productimage}`;
+
+  useEffect(() => {
+    const fetchImage = async () => {
+  
+      // Check if the image is already cached
+      if (imageCache[fullUri]) {
+        setUri(imageCache[fullUri]);
+        setLoadingimage(false);
+        return;
+      }
+
+      setLoadingimage(true);
+      setError(false);
+
+      try {
+        const filename = fullUri.split("/").pop();
+        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        const info = await FileSystem.getInfoAsync(fileUri);
+
+        if (info.exists) {
+          // Cache the locally available image
+          imageCache[fullUri] = fileUri;
+          setUri(fileUri);
+        } else {
+          // Download the image if it isn't locally available
+          const response = await FileSystem.downloadAsync(fullUri, fileUri);
+          imageCache[fullUri] = response.uri;
+          setUri(response.uri);
+        }
+      } catch (e) {
+        console.error("Error loading image:", e);
+        setError(true);
+      } finally {
+        setLoadingimage(false);
+      }
+    };
+
+    fetchImage();
+  }, [fullUri]);
 
 
   // console.log('Parsed Product:', productId);
@@ -258,6 +327,7 @@ const ProductDetails = () => {
       const { product, productRating, productRatingCount, userRating, userProductCount } = response.data;
 
       setProduct(product);  // Set the product details
+      setproductimage(product.image);  // Set the product image
       await fetchSRP(product.title);  // Fetch SRP data for the product category
       setSelectedCommodity(product.commodity);  // Set the filtered commodities list
       setProductsRating(productRating);  // Set the overall average rating
@@ -309,7 +379,7 @@ const ProductDetails = () => {
         setSrpData(null);
       }
     } catch (error) {
-      console.error("Error fetching SRP:", error);
+      // console.error("Error fetching SRP:", error);
     }
   };
   
@@ -676,7 +746,7 @@ const ProductDetails = () => {
         'Content-Type': 'application/json',
       },
     });
-    console.log('Response:', response.data);
+    console.log('replyResponse:', JSON.stringify(response.data, null, 2));
       const newReply = response.data;
 
       setReplies((prevReplies) => ({
@@ -738,7 +808,7 @@ const ProductDetails = () => {
         'Content-Type': 'application/json',
       },
     });
-    console.log('Responsereply:', response.data);
+    console.log('Responsereply:', JSON.stringify(response.data, null, 2));
       const newReply = response.data;
 
       // update the replies state with the new reply
@@ -769,7 +839,11 @@ const ProductDetails = () => {
   };
 
 // Fetch replies for comments
-const fetchReplies = useCallback(async (commentIDs) => {
+interface FetchRepliesResponse {
+  replies: Replies[];
+}
+
+const fetchReplies = useCallback(async (commentIDs: string[]) => {
   try {
     const token = await AsyncStorage.getItem('authToken');
     if (!token) {
@@ -777,7 +851,7 @@ const fetchReplies = useCallback(async (commentIDs) => {
       return;
     }
 
-    const response = await axios.get(`${BASE_URL}/api/replies/${commentIDs}`, {
+    const response = await axios.get<FetchRepliesResponse>(`${BASE_URL}/api/replies/${commentIDs}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -787,13 +861,27 @@ const fetchReplies = useCallback(async (commentIDs) => {
       return; // No replies found
     }
 
-    const groupedReplies = response.data.replies.reduce((acc, reply) => {
+    const groupedReplies = response.data.replies.reduce((acc: Record<string, Replies[]>, reply: Replies) => {
       const { comment_id } = reply;
-      if (!acc[comment_id]) acc[comment_id] = [];
+    
+      // Check if comment_id is valid (not null or undefined)
+      if (comment_id === undefined || comment_id === null) {
+        // console.warn('Reply without valid comment_id:', reply);
+        return acc; // Skip this reply if comment_id is invalid
+      }
+    
+      // Ensure an array exists for each comment_id
+      if (!acc[comment_id]) {
+        acc[comment_id] = [];
+      }
+    
+      // Group the replies by comment_id
       acc[comment_id].push(reply);
+    
       return acc;
     }, {});
-
+    
+    
     setReplies(groupedReplies);
   } catch (err) {
     if (axios.isAxiosError(err) && err.response && err.response.status >= 500) {
@@ -824,8 +912,8 @@ const RenderReplies = ({ item }: { item: Replies }) => {
   const afterText = hasValidLink ? replyText.slice(startIdx + productPrefix.length + 16) : '';
 
   const toggleReplyInputVisibility = (replyId: string, commentId: string) => {
-    console.log('Toggled Item ID:', replyId); // Log item.id
-    console.log('Toggled Comment ID:', commentId); // Log comment.id
+    // console.log('Toggled Item ID:', replyId); // Log item.id
+    // console.log('Toggled Comment ID:', commentId); // Log comment.id
     setReply_Visibility((prev) => ({
       ...prev,
       [replyId]: !prev[replyId], // Toggle visibility for this comment's reply input
@@ -833,8 +921,17 @@ const RenderReplies = ({ item }: { item: Replies }) => {
   };
 
  // Safely determine the target user's name 
- const targetUser = item.replies_to && item.replies_to.user ? item.replies_to.user : (item.comment && item.comment.user ? item.comment.user : null); 
- const targetUserName = targetUser ? `${targetUser.Firstname} ${targetUser.Lastname}` : 'Unknown User'; 
+console.log('ReplyToItem:', JSON.stringify(item, null, 2));
+const targetUser = item.parent_reply && item.parent_reply.user 
+? item.parent_reply.user  // Use parent reply's user if it exists
+: (item.comment && item.comment.user 
+    ? item.comment.user  // Otherwise, use comment's user
+    : null);
+
+const targetUserName = targetUser 
+? `${targetUser.Firstname} ${targetUser.Lastname}` 
+: 'Unknown User';
+
 //  console.log('Target User:', targetUser);
   return (
       <View>
@@ -854,7 +951,7 @@ const RenderReplies = ({ item }: { item: Replies }) => {
     </TouchableOpacity>
 
     <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
-      <Text style={{ color: 'black' }}>
+      <Text style={{ color: 'black', width: 290 }}>
         {beforeText}
         {hasValidLink ? (
           <Text style={{ color: 'blue' }}>{productLink}</Text>
@@ -900,6 +997,7 @@ const RenderReplies = ({ item }: { item: Replies }) => {
                     placeholder="Add a reply..." 
                     onFocus={handleReplyFocus1} 
                     onBlur={() => setFocusedInput(null)} 
+                    maxLength={100}
                   />
                   <TouchableOpacity style={styles.sendButton} onPress={() => handle_ReplySubmit(item.id, item.comment_id.toString())}>
                     <Image source={icons.send} style={styles.icon} />
@@ -937,9 +1035,34 @@ const RenderReplies = ({ item }: { item: Replies }) => {
   const handleReplyPress = (commentId: string) => {
     setReplyVisibility((prev) => ({
       ...prev,
-      [commentId]: !prev[commentId], // Toggle visibility for both replies and input
+      [commentId]: !prev[commentId], // Toggle reply input visibility
     }));
+
+    replyInputRef.current?.focus();
+  
+    setTimeout(() => {
+      if (replyInputRef.current) {
+        replyInputRef.current.focus();
+        setFocusedInput("reply"); // Ensure it stays focused
+      }
+    }, 150);
   };
+
+//   const handleReplyPress = () => {
+//     console.log("Reply Focus Triggered");
+//     replyInputRef.current?.focus();
+// };
+  
+
+  useEffect(() => {
+    console.log('Component re-rendered');
+  });
+
+  // for debug only to see reply mounting
+  // useEffect(() => {
+  //   console.log('Reply Input Mounted:', replyInputRef.current);
+  // }, [replyVisibility]);
+  
   
   
   
@@ -1110,13 +1233,20 @@ const handleDeletereply = async (id: string | number) => {
         }
 
 
+       // Keyboard handling
 useEffect(() => {
   const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
-    if (focusedInput) setKeyboardVisible(true); // Show keyboard only if an input is focused
+    if (focusedInput) setKeyboardVisible(true);
   });
+
   const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
     setKeyboardVisible(false);
-    setFocusedInput(null); // Reset focused input on keyboard hide
+    setFocusedInput(null);
+
+    // Prevent resetting focus if an input is still active
+    // if (!focusedInput) {
+    //   setFocusedInput(null);
+    // }
   });
 
   return () => {
@@ -1124,14 +1254,23 @@ useEffect(() => {
     keyboardDidHideListener.remove();
   };
 }, [focusedInput]);
+        
 
 const handleCommentFocus = () => setFocusedInput('comment');
-const handleReplyFocus = () => {
-  setFocusedInput('reply');
+
+// Focus handler
+const handleReplyFocus = (commentId : any) => {
+  // console.log("Reply Focus Triggered for Comment ID:", commentId);
+  setFocusedInput(commentId);
   if (replyInputRef.current) {
-    replyInputRef.current.focus(); // Focus on the reply input immediately
+    console.log("Reply Input Ref Found, Attempting Focus");
+    replyInputRef.current.focus(); 
+  } else {
+    console.log("Reply Input Ref is NULL");
   }
 };
+
+
 const handleReplyFocus1 = () => {
   setFocusedInput('reply');
 };
@@ -1243,7 +1382,7 @@ const handleGoBack = () => {
 
       // If a valid recent route is found, navigate to it
       if (recentRoute) {
-        navigation.navigate(recentRoute.name, recentRoute.params);
+        navigation.navigate(recentRoute.name as any, recentRoute.params as any);
       } else {
         // If no valid recent route is found, navigate to (tabs) as the default
         navigation.navigate('(tabs)');
@@ -1372,23 +1511,32 @@ const renderHeader = () => (
             srpData={selectedCommodity ? [selectedCommodity] : []} // Pass selectedCommodity as an array
           /> */}
 
-      <View style={styles.imagecontainer}>
-      <TouchableOpacity onPress={() => setShowOriginalImage(!showOriginalImage)}>
-        {loading ? (
-          <ActivityIndicator size="large" color="#0000ff" style={styles.loadingIndicator} />
-        ) : (
-          <ImageLoader imageUri={imageUri} style={styles.productImage} 
-          onError={() => {
-            console.log('Image failed to load');
-            <Image 
-            source={icons.LoadingAgribid} 
-            style={styles.loadingicon}
-            resizeMode="contain" // Ensure the image fits within the circular container
-          /> 
-          }} />
-        )}
-      </TouchableOpacity>
-      </View>
+<View style={styles.imagecontainer}>
+  <TouchableOpacity onPress={() => setShowOriginalImage(!showOriginalImage)}>
+    {loadingimage || !uri ? ( // Show loading if the image is still loading or `uri` is not set
+      <ActivityIndicator
+        size="large"
+        color="#0000ff"
+        style={styles.loadingIndicator}
+      />
+    ) : error ? (
+      <Image
+        source={images.Agribid} // Replace with your local fallback image
+        style={styles.productImage}
+      />
+    ) : (
+      <Image
+        source={{ uri }}
+        style={styles.productImage}
+        // onError={() => {
+        //   console.log("Image failed to load");
+        //   setError(true); // Mark as error if image fails to load
+        // }}
+      />
+    )}
+  </TouchableOpacity>
+</View>
+
       <View style={styles.productrow}>
         <View style={styles.productdetails}>
           <Text>{product?.description}</Text>
@@ -1445,7 +1593,8 @@ return (
     keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 30}>
       
       <KeyboardAwareFlatList
-         data={(comments ?? []).slice().reverse()} 
+      contentContainerStyle={styles.listContainer}
+        data={(comments ?? []).slice().reverse()} 
         keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString())}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={() => (
@@ -1483,7 +1632,7 @@ return (
       </TouchableOpacity>
 
       <TouchableOpacity style={{ width: 350 }} onPress={() => hasValidLink && handlelink(productLink)}>
-        <Text style={{ color: 'black' }}>
+        <Text style={{ color: 'black', width: 290}}>
           {beforeText}
           {hasValidLink ? (
             <Text style={{ color: 'blue' }}>{productLink}</Text>
@@ -1527,6 +1676,7 @@ return (
                     data={replies[item.id] || []}
                     keyExtractor={reply => reply.id.toString()}
                     renderItem={RenderReplies}
+                     keyboardShouldPersistTaps="handled"
                   />
                 )}
 
@@ -1540,6 +1690,9 @@ return (
                           placeholder="Add a reply..."
                           onFocus={handleReplyFocus}
                           onBlur={() => setFocusedInput(null)}
+                          // onFocus={() => console.log('Reply Input Focused')}
+                          // onBlur={() => console.log('Reply Input Blurred')}
+                          maxLength={100}
                         />
                       <TouchableOpacity style={styles.sendButton} onPress={() => handleReplySubmit(item.id)}>
                         <Image source={icons.send} style={styles.icon} />
@@ -1562,7 +1715,7 @@ return (
           {loading ? (
             <ActivityIndicator size="large" color="#0000ff" style={styles.loadingIndicator} />
           ) : (
-            <ImageLoader imageUri={imageUri} style={styles.originalImage} onError={() => console.log('Image failed to load')} defaultSource={require('../assets/images/empty.png')} />
+            <ImageLoader imageUri={productimage || ''} style={styles.originalImage} onError={() => console.log('Image failed to load')} />
           )}
           <TouchableOpacity style={styles.closeButton} onPress={() => setShowOriginalImage(false)}>
             <Text style={styles.closeText}>&times;</Text>
@@ -1580,7 +1733,7 @@ return (
     <View style={styles.modalView}>
     <View style={styles.messageheader}>
                 <Text style={styles.headerText}> 
-                  Your product
+                  Your product messages
                   <Image 
                     source={icons.contact} 
                     style={styles.icon}
@@ -1624,6 +1777,9 @@ return (
     style={styles.commentInput}
     onFocus={handleCommentFocus}
     onBlur={() => setFocusedInput(null)}
+  //   onFocus={() => console.log('comment Input Focused')}
+  // onBlur={() => console.log('comment Input Blurred')}
+    maxLength={100}
   />
   <TouchableOpacity style={styles.sendButton} onPress={handleCommentSubmit}>
     <Image
@@ -1644,6 +1800,11 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 10,
     backgroundColor: '#B4CBB7',
+  },
+  listContainer: {
+    // flex: 1,
+    // backgroundColor: '#f8f8f8', // Light background for contrast
+    paddingBottom: 350, // Ensure some spacing at the bottom
   },
   header: {
       flexDirection: 'row',                // Arrange children in a row

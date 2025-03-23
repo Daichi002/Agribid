@@ -24,6 +24,7 @@ class ProductController extends Controller
             ->where('live', true) // Add condition to check if 'live' is true
             ->withAvg('ratings', 'rate') // Calculate average rating from the ratings table
             ->withCount('ratings') // Count the number of ratings for each product
+            ->withCount('comments') // Count the number of comments for each product
             ->get()
             ->map(function ($product) {
                 $product->ratings_avg_rate = $product->ratings_avg_rate ?? 0;
@@ -114,7 +115,7 @@ public function offerproduct($productId)
 {
     // Fetch the product details based on the provided productId
     $product = Product::where('id', $productId)
-        ->select('id', 'user_id', 'title', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+        ->select('id', 'user_id', 'title', 'commodity', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
         ->where('live', true)
         ->with(['user:id,Firstname,Lastname']) // Only fetch the firstname and lastname from User
         ->first();
@@ -192,11 +193,7 @@ public function getUserwithProducts($userId)
     
         return response()->json($products);
     }
-    
-    public function suggestSRp(request $request)
-    {
-       
-    }
+
 
 
 
@@ -288,6 +285,7 @@ public function getUserwithProducts($userId)
         $validatedData = $request->validate([
             'id' => 'required|exists:products,id', // Ensure the product exists
             'title' => 'nullable|string',
+            'commodity' => 'nullable|string',
             'description' => 'nullable|string',
             'quantity' => 'nullable|integer',
             'unit' => 'nullable|string', // Add unit field
@@ -360,6 +358,30 @@ public function getUserwithProducts($userId)
             return response()->json(['message' => 'Product not found or another error occurred.', 'error' => $e->getMessage()], 400);
         }
     }
+
+
+    public function adminproduct(Request $request)
+    {
+        $query = Product::select('id', 'user_id', 'title', 'commodity', 'description', 'quantity', 'price', 'locate', 'image', 'created_at')
+            ->where('live', true)
+            ->withAvg('ratings', 'rate')
+            ->withCount('ratings');
+    
+        // Optional date filtering
+        if ($request->has('start_date') && $request->has('end_date') &&
+            !empty($request->start_date) && !empty($request->end_date)) {
+            $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
+        }
+    
+        $products = $query->get()->map(function ($product) {
+            $product->ratings_avg_rate = $product->ratings_avg_rate ?? 0;
+            return $product;
+        });
+    
+        return response()->json($products);
+    }
+    
+
 
 
 

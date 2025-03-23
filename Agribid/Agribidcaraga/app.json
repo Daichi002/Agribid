@@ -19,21 +19,21 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
+   "android": {
+      "package": "com.agribid.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/Agribid.png",
-        "backgroundColor": "#ffffff",
-        "package": "com.agribid",
-        "jsEngine": "jsc",
-        "permissions": [],
-        "useNextNotificationsApi": true,
-        "useCleartextTraffic": true,
-        "scripts": {
-          "prebuild": "npx react-native link @pusher/pusher-websocket-react-native"
-        }
+        "backgroundColor": "#ffffff"
       },
-      "package": "com.agribid.app"
+      "jsEngine": "jsc",
+      "permissions": [],
+      "useNextNotificationsApi": true,
+      "useCleartextTraffic": true,
+      "scripts": {
+        "prebuild": "npx react-native link @pusher/pusher-websocket-react-native"
+      }
     },
+    
     "web": {
       "bundler": "metro",
       "output": "static",
@@ -45,6 +45,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "0feb9655-74e8-4fa4-adf8-0a8493010f66"
+      }
     }
   }
 }

@@ -32,12 +32,11 @@ class Reply extends Model
 
     
 
-    public function replies()
+    public function parentReply()
     {
-        return $this->hasMany(Reply::class, 'replies_to');
+        return $this->belongsTo(Reply::class, 'replies_to'); // Fetch the reply being responded to
     }
 
-
-
 }
+
 

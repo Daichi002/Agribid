@@ -17,13 +17,15 @@ class Report extends Model
         'Reported_comments_id', 
         'reported_user_id', 
         'reason', 
-        'details'
+        'details',
+        'status',
     ];
 
 
+    // Define the relationship with the User model
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'Reporter_id');
     }
 
     public function product()

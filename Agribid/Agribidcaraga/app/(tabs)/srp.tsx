@@ -12,13 +12,22 @@ import BASE_URL from '../../components/ApiConfig';
 
 
 const Srp = () => {
-  const [srp, setSrp] = useState<any[]>([]);
+  const [srp, setSrp] = useState<Array<any>>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // const sortedSrp = SortedSrp(srp, sortOrder);
 
   useEffect(() => {
     // dropstorage();
     getSrpData();
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchSrp();
+    // await dropstorage();
+    // await getSrpData();
+    Toast.show('Srp List updated', Toast.SHORT);
+    setIsRefreshing(false);
   }, []);
 
 
@@ -95,6 +104,7 @@ const fetchSrp = async () => {
       
           // Save the updated data to AsyncStorage
           await AsyncStorage.setItem('srpData', JSON.stringify(currentData));
+          await getSrpData();
           console.log('SRP data updated in AsyncStorage successfully!');
       } else {
           console.error('Processed data is not an array:', processedData);
@@ -165,25 +175,17 @@ const dropstorage = async () => {
 };
 
 
-
-
-const onRefresh = useCallback(async () => {
-  setIsRefreshing(true);
-  await fetchSrp();
-  await getSrpData();
-  Toast.show('Srp List updated', Toast.SHORT);
-  setIsRefreshing(false);
-}, []);
-
+const reversedSrp = Object.values(srp);
+// const reversedSrp = Object.values(srp).reverse();
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-        <Image
-          source={icons.Agribid}
-          style={styles.icon} // Use a separate style for better control
-        />
+          <Image
+            source={icons.Agribid}
+            style={styles.icon} // Use a separate style for better control
+          />
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.titleText}>
@@ -193,20 +195,17 @@ const onRefresh = useCallback(async () => {
           <Text style={styles.subText}>AGUSAN DEL NORTE - BUTUAN CITY</Text>
         </View>
       </View>
-
-      <FlatList
-      data={srp || []} // Use an empty array if srp is null or undefined
-      renderItem={({ item }) => <CommodityPriceList data={item} />} // Render each item in CommodityPriceList
-      keyExtractor={(item, index) => index.toString()} // Key extractor for flat list
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={onRefresh} // Trigger onRefresh when pulled
-        />
-      }
-      style={styles.listcontainer}
-      ListEmptyComponent={<Text>Loading...</Text>} // Show loading text if srp is empty
+      <ScrollView
+  refreshControl={
+    <RefreshControl
+      refreshing={isRefreshing}
+      onRefresh={onRefresh} // Trigger onRefresh when pulled
     />
+  }
+  style={{ flex: 1 }}
+>
+  <CommodityPriceList data={reversedSrp}/>
+</ScrollView>
     </SafeAreaView>
   )
 }
@@ -250,12 +249,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',  // Horizontally align the text to the start
   },
   titleText: {
-    fontSize: 8,  // Adjust font size as needed for readability
+    fontSize: 6,  // Adjust font size as needed for readability
     fontWeight: 'bold',
     textAlign: 'center',  // Center text
   },
   mainText: {
-    fontSize: 20,     // Larger font size for the main title
+    fontSize: 18,     // Larger font size for the main title
     fontWeight: 'bold',
     textAlign: 'center',  // Center text
   },

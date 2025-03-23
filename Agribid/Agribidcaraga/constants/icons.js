@@ -14,7 +14,7 @@ import play from "../assets/icons/play.png";
 import Agribid from "../assets/icons/Agribid.png";
 import LoadingAgribid from "../assets/icons/LoadingAgribid.png";
 import slider from "../assets/icons/slider.png";
-import Agribidlogo from "../assets/icons/Agribid.jpg";
+// import Agribidlogo from "../assets/icons/Agribid.jpg";
 import srp from "../assets/icons/srp.png";
 import send from "../assets/icons/send.png";
 import Delete1 from "../assets/icons/Delete 1.png";
@@ -37,6 +37,10 @@ import approve from "../assets/icons/approve.png";
 import ribbon from "../assets/icons/ribbon.png";
 import srptag from "../assets/icons/srptag.png";
 import srptag2 from "../assets/icons/srptag2.png";
+import question from "../assets/icons/question.png";
+import facebook from "../assets/icons/facebook.png";
+import comments from "../assets/icons/comments icom.png";
+
 
 export default {
   play,
@@ -56,7 +60,7 @@ export default {
   LoadingAgribid,
   slider,
   srp,
-  Agribidlogo,
+  // Agribidlogo,
   send,
   Delete1,
   garbage,
@@ -78,4 +82,7 @@ export default {
   ribbon,
   srptag,
   srptag2,
+  question,
+  facebook,
+  comments,
 };

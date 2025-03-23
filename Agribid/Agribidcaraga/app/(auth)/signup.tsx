@@ -110,7 +110,7 @@ interface LookupMap {
       });
   
       if (checkResponse.data.exists) {
-        Alert.alert("Error", "Phone number already exists.");
+        Alert.alert("Error", "Phone number cannot be used.");
         setIsLoading(false);
         setSubmitting(false);
         return;
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     marginTop: 26,
     position: 'absolute',
     left: 3,
-    top: 2,
+    top: 4.5,
     // backgroundColor: '#f5f5f5', // Background color to match the input
     zIndex: 1, // Ensure it stays above the input
   },
@@ -509,10 +509,10 @@ const styles = StyleSheet.create({
   },
   picker: {
     width: '100%',
-    height: 50,
+    height: 60,
   },
   label: {
-    fontSize: 18,
+    fontSize: 16,
     marginVertical: 10,
   },
   addressContainer: {

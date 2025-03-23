@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView, Image, Modal, FlatList, RefreshControl, Dimensions, ImageBackground } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView, Image, Modal, FlatList, RefreshControl, Dimensions, ImageBackground, BackHandler } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation} from '@react-navigation/native';
 import axios from 'axios';
@@ -14,6 +14,7 @@ import ProtectedRoute from '../../components/ProtectedRoute';
 import MessageItem from '../../components/MessageItem';
 import UnreadMessagesNotification from '../../components/UnreadMessagesNotification'; 
 import BASE_URL from '../../components/ApiConfig';
+import ContactAdmin from '../../components/ContactAdmin';
 
 const screenWidth = Dimensions.get('window').width;
 const { height } = Dimensions.get('window'); 
@@ -58,7 +59,9 @@ const UserDetailsScreen = () => {
     const [messageList, setMessageList] = useState<Message[]>([]);
     const [totalmessage, setTotalmessage] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
-    const [clickedItems, setClickedItems] = useState(new Set());
+    const [messagenotif, setMessagenotif] = useState([]);
+
+    const [isAdminModalVisible, setAdminModalVisible] = useState(false);
 
     const [forceRender, setForceRender] = useState(false); 
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -66,6 +69,15 @@ const UserDetailsScreen = () => {
     const [userRating, setUserRating] = useState(0);
     const [ratingCount, setRatingCount] = useState(0);
     const { showAlert } = useAlert();
+
+
+    const handleAdminMessage = () => {
+      setAdminModalVisible(true);
+    };
+  
+    const closeModal = () => {
+      setAdminModalVisible(false);
+    };
 
 // normalize data for a more dynamic variable sync
 const normalizeKeys = (obj: { [key: string]: any }): { [key: string]: any } => {
@@ -250,6 +262,8 @@ useEffect(() => {
         // console.log('Loaded messages from storage:', parsedMessages);
         // Optionally, update the state
         setMessageList(parsedMessages);
+        setTotalmessage(parsedMessages.length);
+
       } else {
         console.log('No messages found in storage.');
       }
@@ -279,6 +293,7 @@ useEffect(() => {
       // Ensure the response data is valid and contains messages
       let senderMessages = response.data.messages;
 
+    
       // Convert the object to an array
       senderMessages = Object.values(senderMessages);
   
@@ -300,7 +315,13 @@ useEffect(() => {
       // Save sorted messages to AsyncStorage
       await AsyncStorage.setItem('sortedMessages', JSON.stringify(senderMessages));
       console.log('Messages saved to storage.');
-  
+
+        // Process message notifications
+    const hasUnreadMessages = senderMessages.some(
+      (item: Message) => item.receiveId === item.currentuserId && item.isRead === 0
+    );
+
+    setMessagenotif(hasUnreadMessages); // Store boolean (true/false) in state
       // Optionally, set the state with the sorted messages for UI rendering
       // setMessageList(senderMessages);
   
@@ -379,6 +400,7 @@ useEffect(() => {
               });
   
               await AsyncStorage.removeItem('authToken');
+              await AsyncStorage.removeItem('userInfo');
   
               logout();
               navigation.navigate('(auth)/login');
@@ -587,6 +609,13 @@ const handleDecline = async (id: any) => {
 };
 
 
+  // const handleadminmessage = () => {
+  //   router.push({
+  //     pathname: '/contactadmin',
+  //   });
+  // };
+
+
   const Gotoeditprofile = () => {
     router.push({
       pathname: '/updateuser',
@@ -607,6 +636,19 @@ const handleDecline = async (id: any) => {
       pathname: '../history/torate',
     });
   };
+
+  useEffect(() => {
+    const handleBackPress = () => {
+      router.replace('/sell'); // Same as your "Go Back" button
+      return true; // Prevents default behavior (going to blank profile page)
+    };
+
+    BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', handleBackPress);
+    };
+  }, []);
 
   return (
     <ProtectedRoute>
@@ -644,10 +686,10 @@ const handleDecline = async (id: any) => {
           >
             <View style={styles.buttonContent}>
               <Image
-                source={icons.contact}
-                style={styles.icon}
-                resizeMode="contain"
-              />
+                      source={messagenotif ? icons.contactnoti : icons.contact}
+                      style={styles.icon}
+                      resizeMode="contain"
+                    />
               <UnreadMessagesNotification />
               <Text style={styles.messageText}>Messages</Text>
             </View>
@@ -669,13 +711,14 @@ const handleDecline = async (id: any) => {
               <View style={styles.messageheader}>
                 <Text style={styles.headerText}> 
                   You have`
-                  {/* {userMessagesCount > 0 ? userMessagesCount : 'No'} */}
-                  <Image 
-                    source={icons.contact} 
-                    style={styles.icon}
-                    resizeMode="contain" // Ensure the image fits within the circular container
-                    //show the message count you have created so far if there are none it is hidden
-                  /> 
+                  {totalmessage > 0 ? totalmessage : 'No'}
+  
+                   <Image
+                      source={messagenotif ? icons.contactnoti : icons.contact}
+                      style={styles.icon}
+                      resizeMode="contain"
+                    />
+
              </Text>
                   <View style={styles.modalButtonContainer}>
                 <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
@@ -801,6 +844,7 @@ const handleDecline = async (id: any) => {
             </View>
             
         </View>
+        <View style={styles.foot}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <View style={styles.logoutContent}>
             <Image
@@ -811,6 +855,20 @@ const handleDecline = async (id: any) => {
             <Text style={styles.logoutButtonText}>Logout</Text>
           </View>
         </TouchableOpacity>
+      <View>                     
+      <ContactAdmin visible={isAdminModalVisible} onClose={closeModal} />
+
+        <TouchableOpacity style={styles.quastionButtom} onPress={handleAdminMessage}>
+          <View style={styles.logoutContent}>
+            <Image
+              source={icons.question}
+              style={styles.questionIcon}
+              resizeMode="contain"
+            />
+          </View>  
+        </TouchableOpacity> 
+       </View> 
+      </View>
       </ImageBackground>
     </SafeAreaView>
     </ProtectedRoute>
@@ -824,6 +882,11 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 10,
     flex: 1,
+  },
+  foot:{
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   maincontainer: {
     // flex: 1,
@@ -997,6 +1060,20 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 5,
   },
+  quastionButtom: {
+    backgroundColor: '#28a745',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 5,
+    alignItems: 'center', // Center the content horizontally in the button
+    justifyContent: 'center', // Ensure content is centered vertically
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+  },
   
   logoutContent: {
     flexDirection: 'row', // Arrange icon and text horizontally
@@ -1016,6 +1093,12 @@ const styles = StyleSheet.create({
     height: 24,
     tintColor: '#ffffff', // Ensure consistent visibility on the button
     marginRight: 8, // Add space between icon and text
+  },
+
+  questionIcon: {
+    width: 24, // Icon size
+    height: 24,
+    tintColor: '#ffffff', // Ensure consistent visibility on the button
   },
   
   buttonContainer: {

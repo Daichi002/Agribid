@@ -79,6 +79,7 @@ const ProductList = ({ products, onMessagePress }: { products: Product[], onMess
 
   const handleProductClick: ProductClickHandler = (product) => {
     setSelectedProduct(product);
+    console.log('Selected Product:', JSON.stringify(product, null, 2));
     setModalVisible(true);
   };
 
@@ -92,7 +93,7 @@ const ProductList = ({ products, onMessagePress }: { products: Product[], onMess
     const imageUri = `${BASE_URL}/storage/product/images/${item.product.image}`;
     const loading = false;
 
-    console.log('Sorted User messages:', JSON.stringify(item.messages, null, 2));
+    // console.log('Sorted User messages:', JSON.stringify(item.messages, null, 2));
 
     return (
       <TouchableOpacity
@@ -181,6 +182,7 @@ const ProductList = ({ products, onMessagePress }: { products: Product[], onMess
               data={selectedProduct?.messages}
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
+                console.log('Selected Product Messages render:', JSON.stringify(item, null, 2)),
                 <TouchableOpacity
                 style={[
                   styles.messageItem,
@@ -312,7 +314,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 5,
     borderRadius: 10,
-    height: '100%',                // Full width of the parent container
+    height: 70,                // Full width of the parent container
     width: '100%',                // Full width of the parent container
     backgroundColor: '#f9f9f9',
     flexDirection: 'row',         // Row-oriented for text and image
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
     borderLeftColor: '#42a5f5', // Blue border to indicate unread
   },
   textContainer: {
-    flex: 1, // This ensures the text group takes up the remaining space
+    // flex: 1, // This ensures the text group takes up the remaining space
     paddingRight: 10, // Add some padding to the right side
   },
   messageRow: {

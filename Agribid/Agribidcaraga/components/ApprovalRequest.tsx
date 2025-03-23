@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   previewtitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 1,
   },
@@ -227,21 +227,21 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   previewprice: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: 'bold',
     marginBottom: 1,
   },
   previewquantity: {
-    fontSize: 14,
+    fontSize: 10,
     marginBottom: 1,
   },
   previewlocation: {
-    fontSize: 14,
+    fontSize: 10,
     marginBottom: 1,
     fontStyle: 'italic',
   },
   previewbuyer: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '600',
   },
   previewactions: {

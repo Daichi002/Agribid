@@ -24,7 +24,8 @@ export const fetchNewNotifications = async () => {
     console.log('Unread notifications count:', unread_count);
 
     if (unread_count > 0) {
-      console.log('New notifications:', notifications);
+      console.log('New notifications:');
+      // notitications
       return true; // Indicate that there are new (unread) notifications
     }
 

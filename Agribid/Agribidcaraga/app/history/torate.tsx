@@ -382,14 +382,14 @@ const styles = StyleSheet.create({
   },
 
   itemTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center', // Centers text horizontally
   },
 
   itemDetails: {
-  fontSize: 14,
+  fontSize: 12,
   color: '#666',
   marginTop: 5,
   textAlign: 'center',
@@ -402,7 +402,7 @@ ratingContainer: {
   flexDirection: 'row',
   alignItems: 'center',
   backgroundColor: '#ffffff',
-  paddingHorizontal: 10, // Scale padding for consistency
+  paddingHorizontal: 5, // Scale padding for consistency
   borderRadius: 16,
   marginTop: 5,
   justifyContent: 'center', // Ensures stars and rating text align better

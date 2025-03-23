@@ -148,7 +148,7 @@ const verifynumer = () => {
               console.log("User Data:", user);
       
               // Success notification
-              Alert.alert("Success", "User registered and logged in successfully!");
+              // Alert.alert("Success", "User registered and logged in successfully!");
       
               // Navigate to the desired screen
               showAlert('User Created And Logged In!', 3000, 'green');

@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     marginTop: 26,
     position: 'absolute',
     left: 3,
-    top: 2,
+    top: 4.5,
     // backgroundColor: '#f5f5f5', // Background color to match the input
     zIndex: 1, // Ensure it stays above the input
   },

@@ -189,6 +189,9 @@ public function notifycommentreply(Request $request)
             }
         ])
         ->find($reply->id);
+
+         // Log the response before returning
+        // Log::info('Reply sent back to frontend:', ['reply' => $replyWithUser]);
     
         // Return the created reply with the user data
         return response()->json($replyWithUser, 201);
@@ -218,12 +221,10 @@ public function notifycommentreply(Request $request)
             
             // Fetch the reply with specific user data (firstname, lastname)
             $replyWithUser = Reply::with([
-                'user:id,Firstname,Lastname',
-                'replies' => function ($query) {
-                    $query->with('user:id,Firstname,Lastname');
-                }
-            ])
-            ->find($reply->id);
+                'user:id,Firstname,Lastname', // The user who wrote this reply
+                'parentReply.user:id,Firstname,Lastname' // The user of the reply being responded to
+            ])->find($reply->id);
+
     
             // Fetch the replies_to relation to get the user_id for the notification's 'for' field
             $repliedToUser = Reply::find($validatedData['replies_to'])->user_id;
@@ -244,6 +245,8 @@ public function notifycommentreply(Request $request)
                     'resource' => $validatedData['reply'],  // The resource type for the notification (the reply text)
                 ]);
             }
+
+            Log::info('Reply with user data being returned:', ['replyWithUser' => $replyWithUser]); // Log the response before returning
     
             return response()->json($replyWithUser, 201); // Respond with created reply including user data
         } catch (\Exception $e) {
@@ -251,6 +254,7 @@ public function notifycommentreply(Request $request)
             return response()->json(['error' => 'An error occurred while submitting the reply.'], 500);
         }
     }
+    
     
 
     
@@ -260,14 +264,13 @@ public function notifycommentreply(Request $request)
             $ids = explode(',', $commentIDs); // Split the IDs by comma
             Log::info('Fetching Replies for comment IDs:', ['commentIDs' => $ids]);
 
-            $replies = Reply::whereIn('comment_id', $ids) // Use whereIn for multiple IDs
+            $replies = Reply::whereIn('comment_id', $ids) // Fetch replies linked to given comment IDs
             ->with([
-                'user:id,Firstname,Lastname', // Load only specific fields for the reply's user
-                'comment.user' => function ($query) { // Load only specific fields for the comment's user
-                    $query->select('id', 'Firstname', 'Lastname'); // Ensure to include the id field to maintain relationship
-                }
+                'user:id,Firstname,Lastname', // Load reply's user (author of the reply)
+                'comment.user:id,Firstname,Lastname', // Load comment's user (author of the comment)
+                'parentReply.user:id,Firstname,Lastname', // Load parent reply's user (if replying to a reply)
             ])
-                ->get();
+            ->get();
 
             Log::info('Fetched Replies:', ['replies' => $replies]);
 

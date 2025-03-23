@@ -97,13 +97,13 @@ const styles = StyleSheet.create({
     height: 60,
     width: 150,
     paddingHorizontal: 25,
-    paddingVertical: 20,
+    paddingVertical: 10,
     borderColor: '#000000',
     borderWidth: 2,
   },
   activeTab: {
     backgroundColor: "#B2EE6D",
-    borderTopWidth: 0,
+    borderTopWidth: 2,
   },
   inactiveTab: {
     backgroundColor: "#f0f0f0",

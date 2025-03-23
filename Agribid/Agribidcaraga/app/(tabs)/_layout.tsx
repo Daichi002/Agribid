@@ -2,10 +2,9 @@ import { Dimensions, StatusBar } from "react-native";
 import { SafeAreaView, Image, Text, View, StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
 import { icons } from "../../constants";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchNewNotifications } from "../../components/notifindicator";
 import UnreadMessagesNotification from '../../components/UnreadMessagesNotification'; 
-import BASE_URL from '../../components/ApiConfig';
 
 // Define a type for your icons
 type IconProps = {
@@ -50,16 +49,28 @@ const TabIcon: React.FC<IconProps> = ({ icon, focused }) => {
 const TabLayout = () => {
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const hasUnread = await fetchNewNotifications(); // Fetch unread status   
-      setHasNewNotifications(hasUnread); // Update state based on response
-      console.log('Has unread notifications:', hasUnread);
-    }, 60000); // Poll every 1 minute (60,000 milliseconds)
   
-    return () => clearInterval(interval); // Cleanup the interval on unmount
+
+  // Shared function for fetching unread notifications
+  const checkForUnreadNotifications = useCallback(async () => {
+    const hasUnread = await fetchNewNotifications();
+    setHasNewNotifications(hasUnread);
+    console.log("Has unread notifications:", hasUnread);
   }, []);
+
+  // Polling logic in useEffect
+  useEffect(() => {
+    const interval = setInterval(checkForUnreadNotifications, 60000); // Poll every 1 minute
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [checkForUnreadNotifications]);
+
+  // Function to manually trigger a notification check
+  const triggerNotificationCheck = useCallback(() => {
+    checkForUnreadNotifications();
+  }, [checkForUnreadNotifications]);
+
+  // Expose the trigger function for external use
+  (global as any).hasUnreadNotifications = triggerNotificationCheck;
 
 
 

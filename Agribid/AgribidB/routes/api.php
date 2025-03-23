@@ -53,6 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/GetSrp', [ProductController::class, 'suggestSRp']); // post product
     Route::post('/update', [ProductController::class, 'update']); // Update product
     Route::resource('products', ProductController::class); // fetch all product
+    Route::get('adminproducts',[ ProductController::class, 'adminproduct']); // fetch all product
     Route::get('/productdetails/{productId}', [ProductController::class, 'productdetails']); // product details
     Route::get('/updateproductdetails/{productId}', [ProductController::class, 'offerproduct']); // product details
     Route::get('/show', [ProductController::class, 'show']);
@@ -98,6 +99,9 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Reports controller
     Route::post('/reports', [ReportController::class, 'store']);
+    Route::get('/getreport', [ReportController::class, 'getReport']);
+    Route::post('/setreport', [ReportController::class, 'setReport']);
+    Route::get('/reporthistory', [ReportController::class, 'Reporthistory']);
 
     // rating
     Route::post('/ratings', [RatingController::class, 'store']);

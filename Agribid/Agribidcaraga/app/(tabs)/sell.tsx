@@ -35,6 +35,7 @@ interface ProductItemProps {
     created_at: string;
     ratings_avg_rate: Float;
     ratings_count: number;
+    comments_count: number;
   };
   handleViewDetails: (item: any) => void;
 }
@@ -134,7 +135,9 @@ const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) =
 
   return (
       <TouchableOpacity onPress={() => handleViewDetails(item)}>
+         
         <View style={styles.productItem}>
+       
           <Text style={styles.productTitle}>{item.title}</Text>
 
           <View style={styles.imagecontainer}>
@@ -159,7 +162,19 @@ const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) =
             <Text style={styles.productDescription} numberOfLines={2} ellipsizeMode="tail">
               {item.description}
             </Text>
+            <View style={styles.middleman}>
             <Text style={styles.productPrice}>P{item.price}</Text>
+            <View style={styles.commentContainer}>
+          <Text> 
+            <Image
+                source={icons.comments} // Fallback placeholder
+                style={styles.commenticon}
+                resizeMode="contain"
+              />
+              {item.comments_count}
+              </Text>
+        </View>
+        </View>
             <Text style={styles.productLocation}>{item.locate}</Text>
 
             <View style={styles.stars}>
@@ -181,6 +196,7 @@ const ProductItem = React.memo(({ item, handleViewDetails }: ProductItemProps) =
             </View>
           </View>
         </View>
+       
       </TouchableOpacity>
   );
 });
@@ -219,7 +235,18 @@ const Sell = () => {
   // const [ratings, setRatings] = useState<any[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const categories = ["Fruits", "LiveStock & Poultry", "Fisheries", "Vegetable", "Crops"];
+  const categories = [
+    "Imported Commercial Rice",
+    "Local Commercial Rice",
+    "Corn ",
+    "Livestock & Poultry Products",
+    "Fisheries",
+    "Lowland Vegetables",
+    "Highland Vegetables",
+    "Fruits",
+    "Species",
+    "Rootcrops",
+  ];
   const navigation = useNavigation();
   const router = useRouter();
 
@@ -1034,4 +1061,25 @@ const styles = StyleSheet.create({
     marginLeft: 10,                      // Space between stars and rating text
     alignSelf: 'center',                 // Center the text vertically with stars
 },
+middleman: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+},
+
+commentContainer: {
+  flexDirection: 'row',
+  alignSelf: 'flex-end',
+  // marginTop: -25,
+  zIndex: 1,
+},
+commenticon: {
+  // width: screenWidth * 0.1,
+  // height: screenHeight * 0.25,
+  width: 25,
+  height: 25,
+  // maxHeight: 1,
+  // alignItems: 'center',         // Ensure image content is centered
+},
+
 });

@@ -41,6 +41,24 @@ interface ProductItemProps {
   handleDelete: (item: { id: number; image: string; title: string; description: string; price: string; locate: string; created_at: string; }) => void;
 }
 
+interface ProductMessage {
+  isRead: number;
+  id: number;
+  sendId: string;
+  receiveId: string;
+  product: {
+    image: string;
+  };
+  counterpart: {
+    id: string
+    Firstname: string;
+    Lastname: string;
+  };
+  message: string;
+  currentuserId: string;
+  created_at: string;
+}
+
 const ProductItem = React.memo(({ item, handleViewDetails, handleDelete }: ProductItemProps) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,7 +166,7 @@ const RenderProductMessages = React.memo(({ item, handleViewMessage, sessionCoun
 
 const Recents = () => {
   interface Product {
-    id: string;
+    id: number;
     image: string;
     title: string;
     description: string;
@@ -280,7 +298,7 @@ const Recents = () => {
       const savedMessageIDs = await AsyncStorage.getItem('userMessages');
       if (savedMessageIDs) {
         const message = JSON.parse(savedMessageIDs);
-        // console.log('Sorted User messages:', JSON.stringify(message, null, 2));
+        console.log('Sorted User messages:', JSON.stringify(message, null, 2));
         setMessages(message); // Set the saved data to the state
 
       } else {
@@ -289,7 +307,7 @@ const Recents = () => {
         if (fetchedMessages) {
           // Save fetched messages to AsyncStorage
           await AsyncStorage.setItem('userMessages', JSON.stringify(fetchedMessages));
-  
+          console.log('Fetched User messages:', JSON.stringify(fetchedMessages, null, 2));
           // Set the fetched data to the state
           setMessages(fetchedMessages);
   
@@ -497,19 +515,47 @@ const handleMessagePress = async (item: { sendId: any; currentuserId: any; produ
     return dateB - dateA; // Sort in descending order
   });
 
-  const sortedData: ProductMessage[] = messages.map((message: any) => {
-    // Assume message has a product_id which is used to match with messageList
-    const messageFromList = messageList[message.id]?.[0];
-    return {
-      id: message.id,
-      image: message.image || '',
-      title: message.title || '',
-      created_at: messageFromList ? messageFromList.created_at : 'Unknown Date', // Use created_at from messageList
-    };
-  }).sort((a, b) => {
-    // Sort by created_at descending
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+
+    // Sort the messages based on the following criteria:
+    const sortedData: ProductMessage[] = messages
+  .map((message: any) => message)
+  .sort((a, b) => {
+    // Get the first message for sorting purposes
+    const aMessages = a.messages && a.messages.length > 0 ? a.messages[0] : null;
+    const bMessages = b.messages && b.messages.length > 0 ? b.messages[0] : null;
+
+    // First, check if both products have messages or not
+    if (aMessages && !bMessages) {
+      return -1; // a has messages, b does not (a goes first)
+    }
+    if (!aMessages && bMessages) {
+      return 1; // b has messages, a does not (b goes first)
+    }
+
+    // If both products have messages, sort by isRead
+    if (aMessages && bMessages) {
+      // If both have messages, prioritize unread (isRead: 0) first
+      if (aMessages.isRead === 0 && bMessages.isRead === 1) {
+        return -1; // a comes before b (unread first)
+      }
+      if (aMessages.isRead === 1 && bMessages.isRead === 0) {
+        return 1; // b comes before a (read second)
+      }
+      
+      // If both messages have the same `isRead` value, sort by created_at
+      const aDate = new Date(aMessages.created_at).getTime();
+      const bDate = new Date(bMessages.created_at).getTime();
+      return bDate - aDate; // Sort by created_at in descending order
+    }
+
+    return 0; // Default case: this shouldn't be hit due to earlier checks
   });
+
+
+
+
+
+
 
 
 
@@ -570,9 +616,8 @@ const handleMessagePress = async (item: { sendId: any; currentuserId: any; produ
       <View style={styles.transactionsContainer}>
         <View style={styles.poster}>
           <Text style={styles.label}>Product Messages:</Text>
-          {/* <Text style={styles.totalProducts}>item with message: {sessionCounts.le}</Text> */}
         </View>
-        <ProductList products={messages} onMessagePress={handleMessagePress}/>
+        <ProductList products={sortedData} onMessagePress={handleMessagePress}/>
       </View>
     </View>
   );

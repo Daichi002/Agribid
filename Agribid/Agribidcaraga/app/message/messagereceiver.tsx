@@ -291,18 +291,34 @@ useEffect(() => {
 
 
  // Function to handle sending message
-    const handleSendMessage = () => {
-      const paramsToSend = {
-        id: '', // Add a valid id value here
-        productId: Array.isArray(productId) ? parseInt(productId[0]) : parseInt(productId),
-        senderId: Array.isArray(senderId) ? parseInt(senderId[0]) : parseInt(senderId),
-        receiverId: Array.isArray(receiverId) ? parseInt(receiverId[0]) : parseInt(receiverId),
-        sessions: Array.isArray(sessions) ? parseInt(sessions[0]) : parseInt(sessions),
-      };
+ const [isSending, setIsSending] = useState(false);
+ const [messageQueue, setMessageQueue] = useState<string[]>([]);
+ 
+ const handleSendMessage = () => {
+   if (isSending || !newMessage.trim()) return; // Prevent duplicate sends
+   setIsSending(true); // 🔒 Lock instantly to prevent duplicate taps
+ 
+   const paramsToSend = {
+     id: '',
+     productId: Array.isArray(productId) ? parseInt(productId[0]) : parseInt(productId),
+     senderId: Array.isArray(senderId) ? parseInt(senderId[0]) : parseInt(senderId),
+     receiverId: Array.isArray(receiverId) ? parseInt(receiverId[0]) : parseInt(receiverId),
+     sessions: Array.isArray(sessions) ? parseInt(sessions[0]) : parseInt(sessions),
+   };
+ 
+   // Queue message before sending
+   setMessageQueue((prevQueue) => [...prevQueue, newMessage]);
+ 
+   sendMessage(paramsToSend)
+     .then(() => {
+       setMessageQueue((prevQueue) => prevQueue.filter((msg) => msg !== newMessage));
+     })
+     .finally(() => setIsSending(false)); // Reset sending state after completion
+ };
+ 
 
-      console.log('Params to send:', paramsToSend);
-      sendMessage(paramsToSend);
-    };
+
+
 
   useEffect(() => {  
     fetchMessages();
@@ -440,8 +456,9 @@ useEffect(() => {
   
   
     // Send message function
-  const sendMessage = async ({ productId, senderId, receiverId, sessions }: SendMessageParams) => {
-      if (!newMessage.trim()) {
+    const sendMessage = async ({ productId, senderId, receiverId, sessions }: SendMessageParams) => {
+      if (messageQueue.includes(newMessage)) {
+        console.warn("Duplicate message detected, skipping.");
         return;
       }
     
@@ -449,26 +466,14 @@ useEffect(() => {
         const token = await AsyncStorage.getItem('authToken');
         const formData = new FormData();
     
-        // Check if newMessage is an image URI
         if (newMessage.startsWith('file')) {
-          try {
-            const response = await fetch(newMessage);
-            if (!response.ok) {
-              throw new Error('Failed to fetch the image');
-            }
-            const blob = await response.blob();
-            // console.log('Fetched image blob:', blob);
-            const fileName = `IMG_${Date.now()}.jpg`; // Generate a unique filename
-            formData.append('image', {
-              uri: newMessage,
-              type: 'image/jpeg',
-              name: fileName,
-            }as any);
-          } catch (error) {
-            console.error('Error fetching the image:', error);
-            Alert.alert("Error", "Could not process the image. Please try again.");
-            return;
-          }
+          const response = await fetch(newMessage);
+          if (!response.ok) throw new Error('Failed to fetch image');
+          formData.append('image', {
+            uri: newMessage,
+            type: 'image/jpeg',
+            name: `IMG_${Date.now()}.jpg`,
+          } as any);
         } else {
           formData.append('text', newMessage);
         }
@@ -477,14 +482,9 @@ useEffect(() => {
         formData.append('sender_id', receiverId);
         formData.append('product_id', productId);
     
-        // console.log('message data', productId, senderId, receiverId, sessions);
-    
+        // Check for existing session
         const responseCheck = await axios.get(`${BASE_URL}/api/messages/session`, {
-          params: {
-            product_id: productId,
-            sender_id: senderId,
-            receiver_id: receiverId,
-          },
+          params: { product_id: productId, sender_id: senderId, receiver_id: receiverId },
           headers: { Authorization: `Bearer ${token}` },
         });
     
@@ -495,55 +495,52 @@ useEffect(() => {
           });
           session = responseMaxSession.data.maxSession + 1;
         }
-    
         formData.append('sessions', session);
     
-        // console.log('Final message data to send:', formData);
-    
         const response = await axios.post(`${BASE_URL}/api/messages`, formData, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
         });
     
-         // Handle the response
-    handleResponse(response);
+        handleResponse(response);
+        setNewMessage('');
     
-    // Clear the message input
-    setNewMessage('');       
       } catch (error) {
         console.error('Error sending message:', error);
         Alert.alert('Error', 'Could not send message.');
       }
-    };     
-    // Handle the response
-    const handleResponse = (response: AxiosResponse<any, any>) => {
-      const newMessage = response.data; // Assuming the response data contains the new message
-      // console.log('New Message:', newMessage); // Log the new message
-      setMessages((prevMessages) => [...prevMessages, newMessage.message]); // Update state with the new message
-      saveMessages(messages, newMessage); // Save the new message to AsyncStorage
     };
     
-     // Save messages to AsyncStorage
-     // Save messages to AsyncStorage
- const saveMessages = async (messages, newMessage) => {
-  try {
-    // Fetch current messages from AsyncStorage
-    const existingMessages = await AsyncStorage.getItem('messages');
-    let currentMessages = existingMessages ? JSON.parse(existingMessages) : [];
 
-    // Combine existing messages with the new one
-    const updatedMessages = [...currentMessages, newMessage];
-
-    // Save updated messages to AsyncStorage
-    await AsyncStorage.setItem('messages', JSON.stringify(updatedMessages));
-
-    console.log('AsyncStorage updated with new messages.');
-  } catch (error) {
-    console.error('Error saving messages:', error);
-  }
-};
+    
+    // ✅ **Handle Response Without Duplicating Messages**
+    const handleResponse = (response: AxiosResponse<any, any>) => {
+      const newMessageData = response.data.message;
+    
+      setMessages((prevMessages) => {
+        const isDuplicate = prevMessages.some(msg => msg.id === newMessageData.id);
+        return isDuplicate ? prevMessages : [...prevMessages, newMessageData];
+      });
+    
+      saveMessages(newMessageData);
+    };
+    
+    // ✅ **Save Messages to AsyncStorage Without Duplicates**
+    const saveMessages = async (newMessage) => {
+      try {
+        const existingMessages = await AsyncStorage.getItem('messages');
+        let currentMessages = existingMessages ? JSON.parse(existingMessages) : [];
+    
+        if (!currentMessages.some(msg => msg.id === newMessage.id)) {
+          currentMessages.push(newMessage);
+          await AsyncStorage.setItem('messages', JSON.stringify(currentMessages));
+          console.log('AsyncStorage updated.');
+        }
+      } catch (error) {
+        console.error('Error saving messages:', error);
+      }
+    };
+    
+    
     
       // Fetch messages from AsyncStorage
       useEffect(() => {
@@ -840,7 +837,15 @@ const GotoUserprofile = () => {
     <TouchableOpacity style={styles.imageButton} onPress={() => setIsModalVisible(true)}>
       <Text style={styles.imageButtonText}>📷</Text>
     </TouchableOpacity>
-    <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
+    <TouchableOpacity
+      style={[styles.sendButton, isSending && { opacity: 0.5 }]}
+      onPress={() => {
+        if (isSending) return; // Stop if already sending
+        setIsSending(true); // Lock button instantly
+        handleSendMessage();
+      }}
+      disabled={isSending}
+    >
       <Text style={styles.sendButtonText}>Send</Text>
     </TouchableOpacity>
   </View>

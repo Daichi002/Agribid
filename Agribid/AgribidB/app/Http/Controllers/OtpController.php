@@ -27,32 +27,32 @@ class OtpController extends Controller
             ['otp' => $otp, 'expires_at' => Carbon::now()->addMinutes(5)]
         );
     
-        // Define the API endpoint and token for iProgTech
-        $apiUrl = 'https://sms.iprogtech.com/api/v1/sms_messages';
-        $apiToken = '861a08cc35c8c46a310fd78616cb6f00044091c3';
+        // // Define the API endpoint and token for iProgTech
+        // // $apiUrl = 'https://sms.iprogtech.com/api/v1/sms_messages';
+        // // $apiToken = '861a08cc35c8c46a310fd78616cb6f00044091c3';
     
-        // Prepare the payload
-        $payload = [
-            'api_token' => $apiToken,
-            'phone_number' => $request->to,
-            'message' => "Hi from Agribid team!\n\n" .
-                         "Your OTP is: $otp\n\n" .
-                         "If you did not create this OTP, please ignore this message.\n" .
-                         "Do not share your OTP, and do not reply to this message as this is automated.",
-        ];
+        // // Prepare the payload
+        // $payload = [
+        //     'api_token' => $apiToken,
+        //     'phone_number' => $request->to,
+        //     'message' => "Hi from Agribid team!\n\n" .
+        //                  "Your OTP is: $otp\n\n" .
+        //                  "If you did not create this OTP, please ignore this message.\n" .
+        //                  "Do not share your OTP, and do not reply to this message as this is automated.",
+        // ];
     
-        // Send OTP via iProgTech API
-        try {
-            $response = Http::post($apiUrl, $payload);
+        // // Send OTP via iProgTech API
+        // try {
+        //     $response = Http::post($apiUrl, $payload);
     
-            if ($response->successful()) {
+        //     if ($response->successful()) {
                 return response()->json(['status' => 'OTP sent!'], 200);
-            } else {
-                return response()->json(['error' => 'Failed to send OTP.'], 500);
-            }
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+        //     } else {
+        //         return response()->json(['error' => 'Failed to send OTP.'], 500);
+        //     }
+        // } catch (\Exception $e) {
+        //     return response()->json(['error' => $e->getMessage()], 500);
+        // }
     }
     
     public function verifyOtp(Request $request)

@@ -31,6 +31,10 @@ interface Notification {
   isRead: number;
 }
 
+declare global {
+  var hasUnreadNotifications: () => void;
+}
+
 const Notif = () => {
   const navigation = useNavigation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -50,6 +54,7 @@ const Notif = () => {
         setIsRefreshing(true);
         setLoading(true);
         await fetchNotifications();
+        await storedNotifications();
         Toast.show('Notifications updated', Toast.SHORT); // Optional Toast message
       } catch (error) {
         console.error('Error refreshing notifications:', error);
@@ -64,7 +69,7 @@ const Notif = () => {
   // Focus effect to fetch notifications periodically
   useFocusEffect(
     React.useCallback(() => {
-      const interval = setInterval(fetchNotifications, 60000); // Fetch every 5 minutes (300000 ms)
+      const interval = setInterval(fetchNotifications, 120000); // Fetch every 2 minutes (120000 ms)
 
       // Fetch notifications when the screen is focused for the first time
       fetchNotifications();
@@ -225,6 +230,7 @@ const Notif = () => {
       );
   
       if (response.status === 200) {
+        global.hasUnreadNotifications(); // Call the function to update the unread status
         // Update the notification status to 'read' in the local state
         notification.isRead = 1; // Directly mutating the notification object
   console.log('Notification marked as read:', notification);

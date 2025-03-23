@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, ScrollView} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import 'react-native-gesture-handler';
-import BASE_URL from '../components/ApiConfig';
 
 import { icons } from "../constants";
 const { width: screenWidth } = Dimensions.get('window');
@@ -16,9 +15,11 @@ const imageUrls = [
   { uri: 'https://imgs.search.brave.com/gZ7wDiDyXJuhR13ZMMCdZqD2gjjShOcLiYJNmPO7QKQ/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9tZWRp/YS5nZXR0eWltYWdl/cy5jb20vaWQvNTg1/ODU5MjQ1L3Bob3Rv/L2Zhcm1lcnMtd2Fs/a2luZy10aHJvdWdo/LW9yZ2FuaWMtc3F1/YXNoLWZpZWxkLmpw/Zz9zPTYxMng2MTIm/dz0wJms9MjAmYz00/NzloRC15ZE8wcFJC/LTNzRENWV2VwSmh0/THBfeVE1a3JoTEo2/TXViRUFVPQ' },
 ];
 
+
 const HomeScreen = () => {
   const [activeIndex, setActiveIndex] = useState(0); // Keeps track of the current image index
   const opacity = useSharedValue(1); // Shared value for opacity animations
+  const [isModalVisible, setModalVisible] = useState(false);
   const navigation = useNavigation();
 
   // Create the animated style for opacity transitions
@@ -28,10 +29,14 @@ const HomeScreen = () => {
     };
   });
 
-  const handlenavtologin = (() => {
-    navigation.navigate("(auth)/login");
-    // navigation.navigate("verifynumber");
-  });
+  
+
+  const handlenavtologin = () => { 
+      // Navigate to the login screen
+      navigation.navigate('agreementscreen');
+
+  };
+  
 
   // Function to automatically rotate images
   useEffect(() => {
@@ -79,7 +84,7 @@ const HomeScreen = () => {
         </View>
 
         <View style={styles.descriptionTitleContainer}>
-          <Text style={styles.descriptionTitle}>Agribid</Text>
+          <Text style={styles.descriptionTitle}>AgriPlace</Text>
         </View>
 
         {/* Description */}
@@ -89,11 +94,10 @@ const HomeScreen = () => {
           </Text>
         </View>
 
-        {/* Get started button */}
-        <TouchableOpacity style={styles.button} onPress={handlenavtologin}>
-          <Text style={styles.buttonText}>Get Started</Text>
-        </TouchableOpacity>
-
+      <TouchableOpacity style={styles.button} onPress={handlenavtologin}>
+        <Text style={styles.buttonText}>Get Started</Text>
+      </TouchableOpacity>
+  
         <View style={styles.footercontainer}> 
         <Text style={styles.footerText}>Made with ♥ by Brix Jay A. Nucos BSIS</Text> 
       </View>
@@ -114,6 +118,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#5FAF60',
+    // height: '100%',
   },
   scrollViewContent: {
     flexGrow: 1,
@@ -127,7 +132,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 20,
+    marginBottom: 10,
   },
   logo: {
     width: 320,        // Adjust this size based on your image content
@@ -196,10 +202,10 @@ const styles = StyleSheet.create({
     flex: 1, 
     justifyContent: 'flex-end', 
     alignItems: 'center', 
-    paddingBottom: 20, // Adjust padding as needed 
+    paddingBottom: 10, // Adjust padding as needed 
     }, 
   footerText: { 
-    fontSize: 16, 
+    fontSize: 10, 
     fontWeight: 'bold', 
   }, 
 });

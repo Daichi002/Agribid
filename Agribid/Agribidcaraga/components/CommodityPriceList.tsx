@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, Modal, StyleSheet, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-simple-toast';
 
 
 // Define category colors with transparency (alpha value)
@@ -21,37 +22,45 @@ interface CommodityPriceListProps {
   data: any; // Replace 'any' with the appropriate type if known
 }
 
-const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
+const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data}) => {
   interface WeekData {
     week: string;
     lastWeek: string;
     weekdata: { [key: string]: CategoryItem };
   }
 
-  const [srp, setSrp] = useState<{ [key: string]: WeekData } | null>(null);
+  // const [srp, setSrp] = useState<{ [key: string]: WeekData } | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null); // To store the selected week for modal
   const [week, setWeek] = useState<string>(''); // To store the selected week for modal
   const [lastweek, setlastweek] = useState<string | null>(null); // To store the selected week for modal
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // To store the selected category for modal
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // const onRefresh = useCallback(async () => {
+  //   setIsRefreshing(true);
+  //   await getSrpData();
+  //   Toast.show('Srp List updated', Toast.SHORT);
+  //   setIsRefreshing(false);
+  // }, []);
 
-  useEffect(() => {
-    getSrpData();
-  }, []);
+  // useEffect(() => {
+  //   getSrpData();
+  // }, []);
 
-  const getSrpData = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('srpData');
-      if (storedData) {
-        const data = JSON.parse(storedData);
-        // console.log("Retrieved data from AsyncStorage:", data);
-        setSrp(data);
-      } else {
-        console.log("No data found in AsyncStorage");
-      }
-    } catch (error) {
-      console.error("Error retrieving data from AsyncStorage:", error);
-    }
-  };
+  // const getSrpData = async () => {
+  //   try {
+  //     const storedData = await AsyncStorage.getItem('srpData');
+  //     if (storedData) {
+  //       const data = JSON.parse(storedData);
+  //       console.log("Retrieved data from AsyncStorage:", data);
+  //       setSrp(data);
+  //     } else {
+  //       console.log("No data found in AsyncStorage");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error retrieving data from AsyncStorage:", error);
+  //   }
+  // };
 
   // Render a single commodity with light/dark color coding
   interface CommodityItem {
@@ -145,10 +154,10 @@ const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
   };
 
   const renderWeekPreview = ({ item, index }: { item: string; index: number }) => {
-    if (!srp) {
+    if (!data) {
       return null;
     }
-    const weekData: { week: string; lastWeek: string; weekdata: { [key: string]: CategoryItem } } = srp[item];
+    const weekData: { week: string; lastWeek: string; weekdata: { [key: string]: CategoryItem } } = data[item];
 
     // Function to format the date as "Nov-24"
   const formatDate = (dateString: string): string => {
@@ -218,9 +227,9 @@ const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
 
   return (
     <View style={styles.container}>
-      {srp ? (
+      {data ? (
         <FlatList
-          data={Object.keys(srp)} // Week data
+          data={Object.keys(data)} // Week data
           renderItem={renderWeekPreview}
           keyExtractor={(item, idx) => idx.toString()}
         />
@@ -258,13 +267,15 @@ const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
               </View>
             </View>
 
-            {selectedWeek && srp && srp[selectedWeek] && (
-              console.log("Selected Week:", selectedWeek),
+            {selectedWeek && data && data[selectedWeek] && (
               <FlatList
-                data={Object.values(srp[selectedWeek].weekdata) as CategoryItem[]} // All categories for selected week
-                renderItem={renderFullCategory}
-                keyExtractor={(item, idx) => idx.toString()}
-              />
+              data={[...(Object.values(data[selectedWeek].weekdata) as CategoryItem[])]} // Reverse categories for selected week
+              renderItem={renderFullCategory}
+              keyExtractor={(item, idx) => idx.toString()}
+            />            
+            )}
+            {selectedWeek && data && data[selectedWeek] && data[selectedWeek].weekdata && Object.keys(data[selectedWeek].weekdata).length === 0 && (
+              <Text>No data available for this week.</Text>
             )}
 
             <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
@@ -317,12 +328,13 @@ const styles = StyleSheet.create({
   nameplate: {
     flexDirection: 'row',
     justifyContent: 'space-between', // Space out "Commodities | PriceRange | Prevailing prices"
-    paddingBottom: 5,
+    marginBottom: 5,
+    borderBottomWidth: 1,
     resizeMode: 'contain',
   },
   
   text: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: 'bold',
     marginRight: 8,
   },
@@ -340,7 +352,7 @@ const styles = StyleSheet.create({
   },
   
   weektext: {
-    fontSize: 12,
+    fontSize: 8,
     marginRight: 5, // Add spacing between "This week" and "|"
   },
   

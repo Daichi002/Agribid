@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     top: '10%',
     left: 0,
     width: width * 0.85,
-    height: 350, // Fixed height for the modal
+    height: '70%', // Fixed height for the modal
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 10,

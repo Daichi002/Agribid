@@ -137,7 +137,7 @@ public function phoneExist(Request $request)
         $password = htmlspecialchars($validatedData['password'], ENT_QUOTES, 'UTF-8');
 
         // Attempt to authenticate the user
-        if (!Auth::attempt(['Phonenumber' => $phonenumber, 'password' => $password])) {
+        if (!Auth::attempt(['Phonenumber' => $phonenumber, 'password' => $password, 'isActive' => 1])) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -175,7 +175,7 @@ public function phoneExist(Request $request)
         $password = htmlspecialchars($validatedData['password'], ENT_QUOTES, 'UTF-8');
 
         // Attempt to authenticate the user with additional IsAdmin check
-        if (!Auth::attempt(['Firstname' => $Firstname, 'Lastname' => $Lastname, 'password' => $password])) {
+        if (!Auth::attempt(['Firstname' => $Firstname, 'Lastname' => $Lastname, 'password' => $password, 'isActive' => 1])) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 

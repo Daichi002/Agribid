@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
-import { Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { Text, StyleSheet, Animated, Dimensions, View } from 'react-native';
 
 interface CustomAlertProps {
+  title?: string; // Optional title prop
   message: string;
   duration: number;
   onDismiss: () => void;
-  color: 'red' | 'green'; // Add a prop for color
+  color: 'red' | 'green' | 'orange'; // Add orange as a valid color
 }
 
-const CustomAlert: React.FC<CustomAlertProps> = ({ message, duration, onDismiss, color }) => {
+const CustomAlert: React.FC<CustomAlertProps> = ({ title, message, duration, onDismiss, color }) => {
   const fadeAnim = new Animated.Value(1);
 
   useEffect(() => {
@@ -29,9 +30,10 @@ const CustomAlert: React.FC<CustomAlertProps> = ({ message, duration, onDismiss,
     <Animated.View
       style={[
         styles.alertContainer,
-        { opacity: fadeAnim, backgroundColor: color }, // Dynamically set background color
+        { opacity: fadeAnim, backgroundColor: color }, 
       ]}
     >
+      {title && <Text style={styles.alertTitle}>{title}</Text>} 
       <Text style={styles.alertText}>{message}</Text>
     </Animated.View>
   );
@@ -48,6 +50,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     transform: [{ translateX: -Dimensions.get('window').width * 0.4 }, { translateY: -25 }], // Center on the screen
     borderRadius: 5,
+  },
+  alertTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
   alertText: {
     color: 'white',

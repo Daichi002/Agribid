@@ -4,7 +4,6 @@ import { StatusBar } from 'react-native';
 import { AuthProvider, AuthContext } from '../components/authcontext'; // Import AuthContext and AuthProvider
 import { useFonts } from 'expo-font';
 import { AlertProvider } from '../components/AlertContext';
-import { GlowProvider } from '../components/GlowContext';
 
 // Prevent splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -42,16 +41,17 @@ const RootLayout = () => {
 
   return (
     <AuthProvider>
-      <GlowProvider>
       <AlertProvider>
         <StatusBar backgroundColor="#161622" barStyle="light-content" />
           <Stack>
-            {/* public screen */}
-            <Stack.Screen name="index" options={{ headerShown: false }} />
+            {/* public screen */}          
+            <Stack.Screen name="index" options={{ headerShown: false }} />   
             <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)/signup" options={{ headerShown: false }} />
+            <Stack.Screen name="agreementscreen" options={{ headerShown: false }} />
             <Stack.Screen name="ForgotPassword" options={{ headerShown: false }} />
 
+            {/* private screen */}
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="updateuser" options={{ headerShown: false }} />
             <Stack.Screen name="history/buy" options={{ headerShown: false }} />
@@ -72,7 +72,6 @@ const RootLayout = () => {
             <Stack.Screen name="userproduct" options={{ headerShown: false }} />
           </Stack>
       </AlertProvider>
-      </GlowProvider>
     </AuthProvider>
   );
 };
