@@ -28,8 +28,13 @@ class OtpController extends Controller
         );
     
         // // Define the API endpoint and token for iProgTech
+<<<<<<< HEAD
         $apiUrl = 'https://sms.iprogtech.com/api/v1/sms_messages';
         $apiToken = '861a08cc35c8c46a310fd78616cb6f00044091c3';
+=======
+        // // $apiUrl = 'https://sms.iprogtech.com/api/v1/sms_messages';
+        // // $apiToken = ' ';
+>>>>>>> 8f812edb9b5d85f9dc3e50f9a0a6a07caaff6007
     
         // Prepare the payload
         $payload = [
