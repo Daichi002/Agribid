@@ -139,6 +139,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::delete('/srps/{id}', [SrpController::class, 'destroy']);
 
+    Route::get('/transactions/approved', [TransactionController::class, 'getApprovedTransactions']);
+
+    Route::get('/alluser', [UserController::class, 'getallUser']);
+
+    Route::post('/removeadmin/{userId}', [UserController::class, 'removeAdmin']);
+    Route::post('/makeadmin/{userId}', [UserController::class, 'makeAdmin']);
+    
+
 
 
 

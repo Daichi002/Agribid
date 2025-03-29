@@ -28,30 +28,31 @@ interface CommodityPriceListProps {
 }
 
 const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
-  const [srp, setSrp] = useState<{ [key: string]: WeekData } | null>(null);
+  // const [srp, setSrp] = useState<{ [key: string]: WeekData } | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null); // To store the selected week for modal
   const [week, setWeek] = useState<string>(''); // To store the selected week for modal
   const [lastweek, setlastweek] = useState<string | null>(null); // To store the selected week for modal
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // To store the selected category for modal
 
-  useEffect(() => {
-    getSrpData();
-  }, []);
 
-  const getSrpData = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('srpData');
-      if (storedData) {
-        const data = JSON.parse(storedData);
-        // console.log("Retrieved data from AsyncStorage:", data);
-        setSrp(data);
-      } else {
-        console.log("No data found in AsyncStorage");
-      }
-    } catch (error) {
-      console.error("Error retrieving data from AsyncStorage:", error);
-    }
-  };
+  // useEffect(() => {
+  //   getSrpData();
+  // }, []);
+
+  // const getSrpData = async () => {
+  //   try {
+  //     const storedData = await AsyncStorage.getItem('srpData');
+  //     if (storedData) {
+  //       const data = JSON.parse(storedData);
+  //       // console.log("Retrieved data from AsyncStorage:", data);
+  //       setSrp(data);
+  //     } else {
+  //       console.log("No data found in AsyncStorage");
+  //     }
+  //   } catch (error) {
+  //     console.error("Error retrieving data from AsyncStorage:", error);
+  //   }
+  // };
 
   // Render a single commodity with light/dark color coding
   const renderCommodityPreview = (item: { commodity: string; price_range: string; prevailing_price_this_week: string; prevailing_price_last_week: string }, index: number, categoryColor: string) => {
@@ -140,10 +141,10 @@ const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
   }
   
   const renderWeekPreview = ({ item, index }: { item: string; index: number }) => {
-    if (!srp) {
+    if (!data) {
       return null;
     }
-    const weekData: WeekData = srp[item];
+    const weekData: WeekData = data[item];
 
     // Function to format the date as "Nov-24"
   const formatDate = (dateString: string) => {
@@ -213,9 +214,9 @@ const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
 
   return (
     <View style={styles.container}>
-      {srp ? (
+      {data ? (
         <FlatList
-          data={Object.keys(srp)} // Week data
+          data={Object.keys(data)} // Week data
           renderItem={renderWeekPreview}
           keyExtractor={(item, idx) => idx.toString()}
         />
@@ -271,13 +272,16 @@ const CommodityPriceList: React.FC<CommodityPriceListProps> = ({ data }) => {
               </View>
             </View>
           <ScrollView>
-            {selectedWeek && srp && srp[selectedWeek] && (
+            {selectedWeek && data && data[selectedWeek] && (
               console.log("Selected Week:", selectedWeek),
               <FlatList
-                data={Object.values(srp[selectedWeek].weekdata)} // All categories for selected week
+                data={Object.values(data[selectedWeek].weekdata) as { category: string; items: { commodity: string; price_range: string; prevailing_price_this_week: string; prevailing_price_last_week: string; }[]; }[]} // All categories for selected week
                 renderItem={renderFullCategory}
                 keyExtractor={(item, idx) => idx.toString()}
               />
+            )}
+            {selectedWeek && data && data[selectedWeek] && data[selectedWeek].weekdata && Object.keys(data[selectedWeek].weekdata).length === 0 && (
+              <Text>No data available for this week.</Text>
             )}
           </ScrollView>
 
@@ -340,7 +344,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 150,
-    paddingBottom: 10,
+    marginBottom: 5,
+    borderBottomWidth: 2,
   },
   text: {
     fontSize: 30,

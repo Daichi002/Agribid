@@ -12,9 +12,10 @@ import eyeHide from "../assets/icons/eye-hide.png";
 import eye from "../assets/icons/eye.png";
 import play from "../assets/icons/play.png";
 import Agribid from "../assets/icons/Agribid.png";
+import Agribid1 from "../assets/icons/Agribid1.png";
 import LoadingAgribid from "../assets/icons/LoadingAgribid.png";
 import slider from "../assets/icons/slider.png";
-import Agribidlogo from "../assets/icons/Agribid.jpg";
+// import Agribidlogo from "../assets/icons/Agribid.jpg";
 import srp from "../assets/icons/srp.png";
 import send from "../assets/icons/send.png";
 import Delete1 from "../assets/icons/Delete 1.png";
@@ -37,6 +38,7 @@ import approve from "../assets/icons/approve.png";
 import ribbon from "../assets/icons/ribbon.png";
 import srptag from "../assets/icons/srptag.png";
 import srptag2 from "../assets/icons/srptag2.png";
+import list from "../assets/icons/list.png";
 
 export default {
   play,
@@ -53,10 +55,11 @@ export default {
   eyeHide,
   eye,
   Agribid,
+  Agribid1,
   LoadingAgribid,
   slider,
   srp,
-  Agribidlogo,
+  // Agribidlogo,
   send,
   Delete1,
   garbage,
@@ -78,4 +81,5 @@ export default {
   ribbon,
   srptag,
   srptag2,
+  list,
 };

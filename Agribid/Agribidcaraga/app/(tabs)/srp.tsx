@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, Image, StyleSheet, RefreshControl, ScrollView, FlatList } from "react-native";
+import { View, Text, Image, StyleSheet, RefreshControl, ScrollView, FlatList, TouchableOpacity } from "react-native";
 import axios from "axios";
+import { router } from "expo-router";
 
 import CommodityPriceList from '../../components/CommodityPriceList';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,15 +12,43 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BASE_URL from '../../components/ApiConfig';
 
 
+ interface UserInfo {
+    IsAdmin: number;
+    // Add other properties of userInfo if needed
+  }
+
 const Srp = () => {
   const [srp, setSrp] = useState<Array<any>>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+ 
+
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   // const sortedSrp = SortedSrp(srp, sortOrder);
 
   useEffect(() => {
     // dropstorage();
     getSrpData();
   }, []);
+
+ 
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const userInfo = await AsyncStorage.getItem('userInfo');
+        if (userInfo) {
+          setUserInfo(JSON.parse(userInfo));
+        } else {
+          console.log('No user info found in AsyncStorage');
+        }
+      } catch (error) {
+        console.error('Error retrieving user info from AsyncStorage:', error);
+      }
+    };
+  
+    fetchUserInfo();
+  }, []);
+  
+  
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -128,7 +157,7 @@ const getSrpData = async () => {
       
       if (storedData) {
           const data = JSON.parse(storedData); // Parse the JSON string into an object
-          console.log("Retrieved data from AsyncStorage:", JSON.stringify(data, null, 2));
+          // console.log("Retrieved data from AsyncStorage:", JSON.stringify(data, null, 2));
 
           // Check if 'data' is an array before attempting to iterate
           if (Array.isArray(data)) {
@@ -162,9 +191,6 @@ const getSrpData = async () => {
 };
 
 
-
-
-
 const dropstorage = async () => {
   try {
     await AsyncStorage.removeItem('srpData');
@@ -174,39 +200,50 @@ const dropstorage = async () => {
   }
 };
 
+const handleCreateRpr = () => {
+  router.navigate("/AdminPRP");// Ensure 'AdminPRP' is registered in your navigator
+};
+
 
 const reversedSrp = Object.values(srp);
 // const reversedSrp = Object.values(srp).reverse();
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={icons.Agribid}
-            style={styles.icon} // Use a separate style for better control
-          />
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.titleText}>
-            AVERAGE WEEKLY PRICES OF SELECTED AGRICULTURAL COMMODITIES
-          </Text>
-          <Text style={styles.mainText}>WEEKLY PRICE MONITORING</Text>
-          <Text style={styles.subText}>AGUSAN DEL NORTE - BUTUAN CITY</Text>
-        </View>
+    <View style={styles.header}>
+      <View style={styles.logoContainer}>
+        <Image source={icons.Agribid} style={styles.icon} />
       </View>
-      <ScrollView
-  refreshControl={
-    <RefreshControl
-      refreshing={isRefreshing}
-      onRefresh={onRefresh} // Trigger onRefresh when pulled
-    />
-  }
-  style={{ flex: 1 }}
->
-  <CommodityPriceList data={reversedSrp}/>
-</ScrollView>
-    </SafeAreaView>
+      <View style={styles.textContainer}>
+        <Text style={styles.titleText}>
+          AVERAGE WEEKLY PRICES OF SELECTED AGRICULTURAL COMMODITIES
+        </Text>
+        <Text style={styles.mainText}>WEEKLY PRICE MONITORING</Text>
+        <Text style={styles.subText}>AGUSAN DEL NORTE - BUTUAN CITY</Text>
+      </View>
+    </View>
+  
+    {/* only show if user is Admin */}
+    {userInfo?.IsAdmin === 1 && (
+      <View style={styles.createrpr}>
+        <TouchableOpacity onPress={() => handleCreateRpr()}>
+          <View style={styles.rprlogoContainer}>
+            <Image source={icons.createrpr} style={styles.rpricon} />
+          </View>
+        </TouchableOpacity>
+      </View>
+    )}
+  
+    <ScrollView
+      refreshControl={
+        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+      }
+      style={{ flex: 1 }}
+    >
+      <CommodityPriceList data={reversedSrp} />
+    </ScrollView>
+  </SafeAreaView>
+  
   )
 }
 
@@ -235,9 +272,23 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',  // Adjust the icon size to fit the container
     overflow: 'hidden',    // Hide any overflow from the container
       },
+  
   logoContainer: {
         width: 80,
         height: 80,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+  rpricon: {
+    width: 50,    // Set a fixed width for the icon
+    height: 50,    // Adjust the height to match the combined text height
+    resizeMode: 'contain',  // Adjust the icon size to fit the container
+    overflow: 'hidden',    // Hide any overflow from the container
+      },
+  rprlogoContainer: {
+        width: 50,
+        height: 50,
         overflow: 'hidden',
         justifyContent: 'center',
         alignItems: 'center',
@@ -383,5 +434,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 5,
     color: "#777",
+  },
+  createrpr: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    marginBottom: 5,
+    // backgroundColor: '#28a745',
   },
 });

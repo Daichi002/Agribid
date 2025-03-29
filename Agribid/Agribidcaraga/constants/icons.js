@@ -40,6 +40,7 @@ import srptag2 from "../assets/icons/srptag2.png";
 import question from "../assets/icons/question.png";
 import facebook from "../assets/icons/facebook.png";
 import comments from "../assets/icons/comments icom.png";
+import createrpr from "../assets/icons/createrpr.png";
 
 
 export default {
@@ -85,4 +86,5 @@ export default {
   question,
   facebook,
   comments,
+  createrpr,
 };

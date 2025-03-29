@@ -10,7 +10,9 @@ import {
   Button,
   Modal,
   Alert,
+  TouchableWithoutFeedback,
 } from "react-native";
+import PrevailingPriceCalculator from "./PrevailingPriceCalculator";
 import CustomButton from './CustomButton2';
 
 // Mapping of categories to commodities
@@ -51,6 +53,11 @@ export default function CategoryCommodityInput({ onSubmit, currentWeek }: Catego
   const [prices, setPrices] = useState<{ [category: string]: { [commodity: string]: { priceRange?: string; prevailingPrice?: string } } }>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [newCommodity, setNewCommodity] = useState("");
+
+  const [surveyModalVisible, setSurveyModalVisible] = useState(false);
+  const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null);  
+  const [selectedCategoryS, setSelectedCategoryS] = useState<string | null>(null);
+
   const selectedCategory = useRef<keyof typeof initialCategories>("Imported Commercial Rice");
 
   
@@ -225,6 +232,14 @@ export default function CategoryCommodityInput({ onSubmit, currentWeek }: Catego
   
     setCategories(transformedCategories);
   }, [currentWeek]);
+
+  
+  const handleCommodityClick = (commodity: string, category: string) => {
+    setSelectedCommodity(commodity);
+    setSelectedCategoryS(category);
+    setSurveyModalVisible(true);
+
+  };
   
   
 
@@ -243,21 +258,28 @@ export default function CategoryCommodityInput({ onSubmit, currentWeek }: Catego
   >
     <View style={styles.categoryHeader}>
       <Text style={styles.categoryTitle}>{category}</Text>
-      <Button
-        title="Add Commodity"
+      <TouchableOpacity 
+        style={styles.button} 
         onPress={() => {
           selectedCategory.current = category as keyof typeof initialCategories;
           setModalVisible(true);
         }}
-      />
+      >
+        <Text style={styles.buttonText}>Add Commodity</Text>
+      </TouchableOpacity>
     </View>
+
     {categories[category as keyof typeof initialCategories]?.map((commodity) => (
       <View key={commodity} style={styles.commodityContainer}>
         <View style={styles.commodityRow}>
-          <Text style={styles.commodityText}>{commodity}</Text>
+         
+        <TouchableWithoutFeedback onPress={() => handleCommodityClick(commodity, category)}>
+        <Text style={styles.commodityText}>{commodity}</Text>
+      </TouchableWithoutFeedback>
+         
           <TextInput
             style={styles.input}
-            placeholder="Price Range(₱XX.XX - ₱XX.XX)"
+            placeholder="Price Range"
             value={prices[category]?.[commodity]?.priceRange}
             onChangeText={(value) =>
               handleInputChangeWithFocus(category, commodity, "priceRange", value)
@@ -267,7 +289,7 @@ export default function CategoryCommodityInput({ onSubmit, currentWeek }: Catego
           />
           <TextInput
             style={styles.input}
-            placeholder="Prevailing Price(₱XX.XX)"
+            placeholder="Prevailing Price"
             value={prices[category]?.[commodity]?.prevailingPrice}
             onChangeText={(value) =>
               handleInputChangeWithFocus(category, commodity, "prevailingPrice", value)
@@ -298,15 +320,57 @@ export default function CategoryCommodityInput({ onSubmit, currentWeek }: Catego
               value={newCommodity}
               onChangeText={setNewCommodity}
             />
-            <Button title="Add" onPress={addCommodity} />
-            <Button
-              title="Cancel"
-              color="blue"
-              onPress={() => setModalVisible(false)}
-            />
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.addButton} onPress={addCommodity}>
+              <Text style={styles.buttonTextadd}>Add</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
           </View>
         </View>
       </Modal>
+
+      <Modal
+  visible={surveyModalVisible}
+  transparent={true}
+  animationType="slide"
+  onRequestClose={() => setSurveyModalVisible(false)}
+>
+  <View style={styles.surveyModalContainer}>
+    <View style={styles.surveyModalContent}>
+      <Text style={styles.surveyModalTitle}>{selectedCommodity} PRP</Text>
+
+      {/* Pass required props to PrevailingPriceCalculator */}
+      <PrevailingPriceCalculator
+      selectedCommodity={selectedCommodity || ""}
+      category={selectedCategoryS || ""}
+      updatePrices={(prp, priceRange) => {
+        console.log("PRP:", prp, "Price Range:", priceRange);
+        
+        setPrices((prevPrices) => ({
+          ...prevPrices,
+          [selectedCategoryS || ""]: {
+            ...(prevPrices[selectedCategoryS || ""] || {}),
+            [selectedCommodity || ""]: {
+              ...(prevPrices[selectedCategoryS || ""]?.[selectedCommodity || ""] || {}),
+              priceRange: priceRange || "",
+              prevailingPrice: prp || "",
+            },
+          },
+        }));
+      }}
+      closeModal={() => setSurveyModalVisible(false)}
+    />
+
+      <Button title="Close" onPress={() => setSurveyModalVisible(false)} />
+    </View>
+  </View>
+</Modal>
+
+
     </View>
   );
 }
@@ -328,7 +392,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   categoryTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "bold",
     marginBottom: 10,
   },
@@ -344,21 +408,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   commodityText: {
-    fontSize: 16,
+    fontSize: 12,
     flex: 1,
-    paddingRight: 10,
+    // paddingRight: 5,
+    width: "40%",
   },
   input: {
-    width: "30%",
+    width: "35%",
     height: 40,
     borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 5,
-    paddingLeft: 8,
+    paddingLeft: 5,
     backgroundColor: "#fff",
+    fontSize: 12,
   },
   deleteButton: {
-    marginLeft: 10,
+    marginLeft: 5,
   },
   modalContainer: {
     flex: 1,
@@ -382,6 +448,79 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 5,
     padding: 8,
+    marginBottom: 20,
+  },
+
+  button: {
+    backgroundColor: '#007bff', // Blue color (change as needed)
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // marginTop: 10,
+  },
+  buttonText: {
+    color: '#fff', // White text
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between', // Aligns buttons side by side
+    marginTop: 10,
+  },
+  addButton: {
+    backgroundColor: '#28a745', // Green color for "Add"
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1, // Makes buttons equal width
+    marginRight: 5, // Adds spacing between buttons
+  },
+  cancelButton: {
+    backgroundColor: '#007bff', // Blue color for "Cancel"
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginLeft: 5,
+  },
+  buttonTextadd: {
+    color: '#fff', // White text
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  surveyModalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  surveyModalContent: {
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+    width: "80%",
+    alignItems: "center",
+  },
+  surveyModalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+    borderBottomWidth: 1,
+  },
+  surveyModalText: {
+    fontSize: 16,
     marginBottom: 20,
   },
 });

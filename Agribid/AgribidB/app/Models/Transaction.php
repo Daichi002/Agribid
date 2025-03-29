@@ -14,6 +14,7 @@ class Transaction extends Model
 
     // Define the fillable attributes
     protected $fillable = [
+        'sessions',
         'buyer_id', 
         'seller_id', 
         'product_id', 
@@ -41,5 +42,10 @@ class Transaction extends Model
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id');
+    }
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class, 'sessions', 'sessions');
     }
 }

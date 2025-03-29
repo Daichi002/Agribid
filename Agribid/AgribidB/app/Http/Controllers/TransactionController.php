@@ -13,6 +13,7 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            'sessions' => 'required|numeric',
             'buyerId' => 'required|exists:users,id',
             'sellerId' => 'required|exists:users,id',
             'productId' => 'required|exists:products,id',
@@ -21,6 +22,7 @@ class TransactionController extends Controller
         ]);        
 
         $transaction = Transaction::create([
+            'sessions' => $request->sessions,
             'buyer_id' => $request->buyerId,
             'seller_id' => $request->sellerId,
             'product_id' => $request->productId,
@@ -219,6 +221,31 @@ class TransactionController extends Controller
             // Return the response as JSON
             return response()->json($transactions);
         }
+
+
+
+    // Get all transactions
+    public function getApprovedTransactions()
+    {
+        $transactions = Transaction::select([
+            'id',
+            'sessions',
+            'buyer_id',
+            'seller_id',
+            'product_id',
+            'quantity',
+            'location',
+            'is_approve',
+            'is_canceled'
+            ])
+            ->with(['buyer', 'seller', 'product', 'messages'])
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'transactions' => $transactions
+        ]);
+    }
 
 
 

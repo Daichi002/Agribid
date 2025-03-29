@@ -221,6 +221,7 @@ const MessageScreen = () => {
   const [promoMessage, setPromoMessage] = useState(''); // Error message for offer
   const [offeredproduct, setOfferedproduct] = useState<Product | null>(null);
   const { showAlert } = useAlert();
+  const [sessions, setSessions] = useState(''); // Session state
 
 
    // Load and cache the image when the image URI is provided
@@ -540,12 +541,15 @@ const sendMessage = async () => {
     });
 
     let session = responseCheck.data.session;
+    
+
     if (!session) {
       const responseMaxSession = await axios.get(`${BASE_URL}/api/messages/max-session`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       session = responseMaxSession.data.maxSession + 1;
     }
+
 
     formData.append('sessions', session);
 
@@ -673,8 +677,8 @@ const handleResponse = (response: AxiosResponse<any, any>) => {
   
   const report = () => {
     if (productId && currentUserId && messages.length > 0) {
-      console.log('Navigating to report message:', messages[0]?.id);
-      navigation.navigate('Reports/reportmessage', { messageId: messages[0]?.id, usermessageId: receiver?.id } as never);
+      console.log('Navigating to report message:', messages[0]?.id, sessions);
+      navigation.navigate('Reports/reportmessage', { messageId: messages[0]?.id, usermessageId: receiver?.id, sessions: sessions } as never);
       setReportModalVisible(false)
     }else{
       alert('An Error occured while trying to report message');
@@ -781,68 +785,127 @@ const decreaseOffer = () => {
   }
 };
   
-  const handleConfirm = async () => {
+const handleConfirm = async () => {
+  try {
+    const token = await AsyncStorage.getItem('authToken');
+    if (!token) {
+      console.error('No auth token found');
+      alert('Authentication token is missing. Please log in again.');
+      return;
+    }
+
+    // Check for an existing session
+    const formData = new FormData();
+    formData.append('receiver_id', productuserId);
+    formData.append('sender_id', currentUserId);
+    formData.append('product_id', productId);
+    formData.append('text', 'Offer sent');
+
+    let session;
+
     try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) {
-        console.error('No auth token found');
-        alert('Authentication token is missing. Please log in again.');
+      const responseCheck = await axios.get(`${BASE_URL}/api/messages/session`, {
+        params: {
+          product_id: productId,
+          sender_id: currentUserId,
+          receiver_id: productuserId,
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log('responseCheck', responseCheck.data); // Debugging API response
+      session = responseCheck.data.session;
+    } catch (error) {
+      console.error('Error checking session:', error);
+    }
+
+    if (!session) {
+      try {
+        const responseMaxSession = await axios.get(`${BASE_URL}/api/messages/max-session`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        session = responseMaxSession.data.maxSession + 1;
+      } catch (error) {
+        console.error('Error fetching max session:', error);
+        alert('Failed to create a new session.');
         return;
       }
-  
-      // Extract the extension from the quantity
-      const extension = getQuantityExtension(offeredproduct?.quantity || ''); // Use offeredproduct.quantity
-      const offerWithExtension = `${offer} ${extension}`; // Combine the offer with the extension
-  
-      console.log('Sending Offer:', curretuseraddress, offerWithExtension, productId, currentUserId, productuserId);
-  
+    }
+
+    console.log('Final session:', session);
+
+    if (session) {
+      setSessions(session); // This updates state, but it's async
+    }
+
+    formData.append('sessions', session); // Ensure session is correctly appended
+
+    // Send the message
+    const responsesession = await axios.post(`${BASE_URL}/api/messages`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+     // Handle the response
+     handleResponse(responsesession);
+
+    // Extract the extension from the quantity
+    const extension = getQuantityExtension(offeredproduct?.quantity || '');
+    const offerWithExtension = `${offer} ${extension}`;
+
+    console.log('Sending Offer:', curretuseraddress, offerWithExtension, productId, currentUserId, productuserId);
+
+    // Wait for the session state update before submitting the offer
+    setTimeout(async () => {
       const response = await axios.post(
         `${BASE_URL}/api/offers`,
-        { 
-          location: curretuseraddress, 
-          offer: offerWithExtension, // Use the offer with extension
+        {
+          sessions: session, // Use the session directly, instead of relying on state
+          location: curretuseraddress,
+          offer: offerWithExtension,
           productId: productId,
           buyerId: currentUserId,
           sellerId: productuserId,
-        },      
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
-  
+
       // Handle the response
       if (response.status === 201 || response.status === 200) {
         console.log('Offer sent successfully:', response.data);
         showAlert('Offer Sent To Seller!', 3000, 'green');
         setOffervisible(false);
-        setOfferedproduct(null); // Clear the product data
+        setOfferedproduct(null);
         setOffer(0);
       } else {
         console.error('Error Submitting Offer:', response.status, response.data);
         alert(`Error: ${response.data?.message || 'Failed to Submit Offer.'}`);
       }
-    } catch (error) {
-      console.error('Error occurred saving Offer:', error);
-  
-      // Handle specific error types
-      if (axios.isAxiosError(error) && error.response) {
-        // Server responded with a status other than 2xx
-        alert(`Server Error: ${error.response.data?.message || 'Unable to Send Offer.'}`);
-      } else if (axios.isAxiosError(error) && error.request) {
-        // Request was made but no response was received
-        alert('Network Error: Please check your connection and try again.');
+    }, 100); // Small delay to ensure session is set
+
+  } catch (error) {
+    console.error('Error occurred saving Offer:', error);
+
+    if (axios.isAxiosError(error) && error.response) {
+      alert(`Server Error: ${error.response.data?.message || 'Unable to Send Offer.'}`);
+    } else if (axios.isAxiosError(error) && error.request) {
+      alert('Network Error: Please check your connection and try again.');
+    } else {
+      if (error instanceof Error) {
+        alert(`Unexpected Error: ${error.message}`);
       } else {
-        // Other errors
-        if (error instanceof Error) {
-          alert(`Unexpected Error: ${error.message}`);
-        } else {
-          alert('Unexpected Error occurred.');
-        }
+        alert('Unexpected Error: An error occurred.');
       }
     }
-  };
+  }
+};
+
   
   return (
     <SafeAreaView style={styles.safeArea}>

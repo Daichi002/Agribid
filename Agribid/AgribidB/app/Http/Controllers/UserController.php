@@ -290,5 +290,39 @@ public function phoneExist(Request $request)
         }
         
 
+     public function getallUser()
+     {
+        // Retrieve all users from the database
+        $users = User::all();
+        // Return the users as a JSON response
+        return response()->json($users);
+     }
+
+     public function makeAdmin($userId)
+{
+    $user = User::find($userId);
+    if (!$user) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    $user->IsAdmin = 1;
+    $user->save();
+
+    return response()->json(['message' => 'User promoted to Admin', 'user' => $user]);
+}
+
+public function removeAdmin($userId)
+{
+    $user = User::find($userId);
+    if (!$user) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    $user->IsAdmin = 0;
+    $user->save();
+
+    return response()->json(['message' => 'Admin role removed', 'user' => $user]);
+}
+
 
 }

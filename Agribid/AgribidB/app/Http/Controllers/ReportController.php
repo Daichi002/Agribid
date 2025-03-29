@@ -6,6 +6,7 @@ use App\Models\Report;
 use App\Models\Reporthistory;
 use App\Models\Product;
 use App\Models\Comment;
+use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -85,12 +86,11 @@ class ReportController extends Controller
 
         // Fetch item details for Product Report
         $itemDetails = null;
-
         if ($reportType === 'Product Report') {
             $itemDetails = Product::where('id', $report->Reported_product_id)
                 ->select('id', 'title', 'commodity', 'description', 'price', 'quantity', 'locate', 'image', 'user_id', 'live', 'created_at')
                 ->with(['user:id,Firstname,Lastname'])
-                ->first(); // Fetch the product as an object
+                ->first();
         }
 
         // Fetch item details for Comment Report
@@ -99,7 +99,43 @@ class ReportController extends Controller
             $commentDetails = Comment::where('id', $report->Reported_comments_id)
                 ->with('user:id,Firstname,Lastname')  // Load the user who commented
                 ->select('id', 'text', 'created_at', 'userId')
-                ->first(); // Fetch the comment and its associated user
+                ->first();
+        }
+
+        // Fetch messages for Message Report
+        $messageDetails = null;
+        if ($reportType === 'Message Report') {
+            // Get the session for the reported message
+            $message = Message::where('id', $report->Reported_message_id)->first();
+
+            if ($message) {
+                $session = $message->sessions;
+                // Get all messages that share the same session
+                $messages = Message::where('sessions', $session)
+                    ->with(['sender:id,Firstname,Lastname', 'receiver:id,Firstname,Lastname'])
+                    ->select('id', 'text', 'created_at', 'sender_id', 'receiver_id', 'sessions')
+                    ->get();
+
+                // Format the messages
+                $messageDetails = $messages->map(function ($msg) {
+                    return [
+                        'messageId' => $msg->id,
+                        'text' => $msg->text,
+                        'sender' => $msg->sender ? [
+                            'id' => $msg->sender->id,
+                            'FirstName' => $msg->sender->Firstname,
+                            'LastName' => $msg->sender->Lastname,
+                        ] : null,
+                        'receiver' => $msg->receiver ? [
+                            'id' => $msg->receiver->id,
+                            'FirstName' => $msg->receiver->Firstname,
+                            'LastName' => $msg->receiver->Lastname,
+                        ] : null,
+                        'createdAt' => $msg->created_at,
+                        'session' => $msg->sessions,
+                    ];
+                });
+            }
         }
 
         return [
@@ -122,11 +158,13 @@ class ReportController extends Controller
                 ] : null,
                 'createdAt' => $commentDetails->created_at,
             ] : null, // For Comment Report
+            'messageDetails' => $messageDetails, // For Message Report
         ];
     });
 
     return response()->json($reportData);
 }
+
 
 
 

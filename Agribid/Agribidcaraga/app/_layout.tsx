@@ -70,6 +70,7 @@ const RootLayout = () => {
             <Stack.Screen name="Reports/reportmessage" options={{ headerShown: false }} />
             <Stack.Screen name="Rating" options={{ headerShown: false }} />
             <Stack.Screen name="userproduct" options={{ headerShown: false }} />
+            <Stack.Screen name="AdminPRP" options={{ headerShown: false }} />
           </Stack>
       </AlertProvider>
     </AuthProvider>

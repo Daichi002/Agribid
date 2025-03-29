@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback} from "react";
 import { View, Text, Image, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal,
- Dimensions, ImageBackground} from "react-native";
+ Dimensions, ImageBackground,
+ Alert} from "react-native";
 import axios from "axios";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { icons } from "../../constants";
@@ -11,6 +12,8 @@ import CommodityPriceList from '../../components/CommodityPriceList';
 import { ScrollView } from "react-native-gesture-handler";
 import BASE_URL from '../../components/ApiConfig';
 import { useAlert } from '../../components/AlertContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import { router } from "expo-router";
 
 
 const screenWidth = Dimensions.get('window').width;
@@ -24,14 +27,127 @@ const Srp = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCategoryCommodityInput, setShowCategoryCommodityInput] = useState(false);
   const { showAlert } = useAlert();
+  const [currentWeek, setCurrentWeek] = useState<Array<{ category: string; commodity: string; price_range: string; prevailing_price_this_week: string }>>([]); // To store the current week for modal
 
 
+  const getcurrentweek = async () => {
+    try {
+      // Retrieve the authentication token from AsyncStorage
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.error('No auth token found');
+        router.push("/login");
+      }
   
-  useEffect(() => {
+      // Make the API request using axios
+      const response = await axios.get(`${BASE_URL}/api/srp/currentweek`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      // Extract the data from the response
+      const data = response.data;
+      setCurrentWeek(data);
+      // Retrieve the stored SRP data from AsyncStorage
+      const storedData = await AsyncStorage.getItem('currentsrpData');
+      const parsedStoredData = storedData ? JSON.parse(storedData) : null;
+  
+      if (!parsedStoredData || parsedStoredData.weekby !== data.weekby) {
+        // If 'weekby' is different or no stored data, save the new data
+        await AsyncStorage.setItem('currentsrpData', JSON.stringify(data));
+        await getcurrentweekstored();
+        console.log('New SRP data saved to storage.');
+      } else {
+        // If 'weekby' is the same, check if any category data has changed
+        interface Category {
+          category: string;
+          commodity: string;
+          price_range: string;
+          prevailing_price_this_week: string;
+        }
+
+        interface SRPData {
+          weekby: string;
+          categories: Category[];
+        }
+
+        const categoriesChanged: boolean =
+          Array.isArray((data as SRPData).categories) &&
+          (data as SRPData).categories.some((newCategory: Category, index: number) => {
+            const storedCategory: Category = (parsedStoredData as SRPData).categories[index];
+            if (!storedCategory) return true; // Handle case where array lengths differ
+
+            // Normalize numeric values by trimming and parsing
+            const newPriceRange: string = newCategory.price_range.trim();
+            const storedPriceRange: string = storedCategory.price_range.trim();
+            const newPrevailing: number = parseFloat(newCategory.prevailing_price_this_week);
+            const storedPrevailing: number = parseFloat(storedCategory.prevailing_price_this_week);
+
+            // Compare all fields
+            return (
+              newCategory.category !== storedCategory.category ||
+              newCategory.commodity !== storedCategory.commodity ||
+              newPriceRange !== storedPriceRange ||
+              newPrevailing !== storedPrevailing
+            );
+          });
+  
+        if (categoriesChanged) {
+          // If any category data has changed, update the stored data
+          await AsyncStorage.setItem('currentsrpData', JSON.stringify(data));
+          await getcurrentweekstored();
+          console.log('SRP data updated due to category change.');
+        } else {
+          console.log('No changes in SRP data.');
+        }
+      }
+    } catch (error) {
+      // Handle errors properly
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error fetching srp:', error.message, error.response?.data);
+      } else {
+        console.error('Unexpected error fetching srp:', error);
+      }
+    }
+  };
+  
+  
+
+
+  const getcurrentweekstored = async () => {
+    try {
+      // Retrieve the stored SRP data from AsyncStorage
+      const storedData = await AsyncStorage.getItem('currentsrpData');
+      
+      // If data exists, parse it and set it to the state
+      if (storedData) {
+        const parsedData = JSON.parse(storedData);
+        setCurrentWeek(parsedData); // Set the current week to state
+        console.log('Stored SRP Data:', parsedData);
+      } else {
+        console.log('No data found in AsyncStorage');
+      }
+    } catch (error) {
+      console.error('Error retrieving SRP data from AsyncStorage:', error);
+    }
+  };
+  
+  
+  useEffect(  () => {
     // dropstorage();
+    // getcurrentweek();
+    // getcurrentweekstored();
     fetchSrp();
     getSrpData();
   }, []);
+
+  
+const onRefresh = useCallback(async () => {
+  setIsRefreshing(true);
+  await fetchSrp();
+  await getSrpData();
+  await getcurrentweek();
+  setIsRefreshing(false);
+}, []);
 
 
   const processSrpData = (data: { [x: string]: any; }) => {
@@ -79,7 +195,7 @@ const fetchSrp = async () => {
       });
 
       const data = response.data;
-      console.log('Raw API Data:', data);
+      // console.log('Raw API Data:', data);
       
       // Process the data (grouping is already done by the backend)
       const processedData = processSrpData(data);
@@ -130,7 +246,7 @@ const getSrpData = async () => {
       
       if (storedData) {
           const data = JSON.parse(storedData); // Parse the JSON string into an object
-          console.log("Retrieved data from AsyncStorage:", JSON.stringify(data, null, 2));
+          // console.log("Retrieved data from AsyncStorage:", JSON.stringify(data, null, 2));
 
           // Check if 'data' is an array before attempting to iterate
           if (Array.isArray(data)) {
@@ -170,6 +286,7 @@ const getSrpData = async () => {
 const dropstorage = async () => {
   try {
     await AsyncStorage.removeItem('srpData');
+    await AsyncStorage.removeItem('currentsrpData');
     console.log('SRP data dropped from AsyncStorage successfully!');
   } catch (error) {
     console.error('Error dropping SRP data from AsyncStorage:', error);
@@ -179,17 +296,19 @@ const dropstorage = async () => {
 
 
 
-const onRefresh = useCallback(async () => {
-  setIsRefreshing(true);
-  await fetchSrp();
-  await getSrpData();
-  setIsRefreshing(false);
-}, []);
 
 
- const handlePress = () => {
-    setShowCategoryCommodityInput((prevState) => !prevState); // Toggle visibility
-  };
+const handlePress = () => {
+  if (showCategoryCommodityInput) {
+    const userConfirmed = window.confirm("Are you sure you want to close? Unsaved changes will be lost.");
+    if (!userConfirmed) return;
+  }
+
+  setShowCategoryCommodityInput((prevState) => !prevState);
+  getcurrentweek();
+};
+
+
 
 
   const transformData = (data: any[]) => {
@@ -225,6 +344,10 @@ const onRefresh = useCallback(async () => {
       console.log("Server response:", response.data); // Axios automatically parses JSON response
       showAlert('This Weeks Srp UpLoaded!', 3000, 'green');
       setShowCategoryCommodityInput((prevState) => !prevState);
+      await getcurrentweek();
+      await getcurrentweekstored();
+      await fetchSrp();
+      await getSrpData();
 
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -246,19 +369,28 @@ const onRefresh = useCallback(async () => {
 
 
   
-  
-  
+  const reversedSrp = Object.values(srp);
+  // const reversedSrp = Object.values(srp).reverse();
 
 
 
   return (
-  
+    <ProtectedRoute>
     <View style={styles.container}>
       <ImageBackground
           source={icons.Agribid} // Your image source
           style={styles.backgroundImage} // Style for the image
           resizeMode="cover" // You can use 'contain' or 'cover' depending on the effect you want
         >
+          <ScrollView
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh} // Trigger onRefresh for both
+        />
+      }
+      contentContainerStyle={styles.scrollContainer} // Added container style
+    >
           <View style={styles.header}>
         <View style={styles.logoContainer}>
         <Image
@@ -280,6 +412,7 @@ const onRefresh = useCallback(async () => {
       <View style={styles.dashboard}>
   {/* CustomButton to the left */}
   <CustomButton title="Refresh" onPress={onRefresh} />
+  {/* <CustomButton title="debugdrop" onPress={dropstorage} /> */}
 
   {/* TouchableOpacity to the right */}
   <TouchableOpacity onPress={handlePress} style={styles.buttonContainer}>
@@ -296,17 +429,9 @@ const onRefresh = useCallback(async () => {
   </TouchableOpacity>
 </View>
 
-    <ScrollView
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={onRefresh} // Trigger onRefresh for both
-        />
-      }
-      contentContainerStyle={styles.scrollContainer} // Added container style
-    >
+    
       {showCategoryCommodityInput && (
-        <CategoryCommodityInput onSubmit={handleSubmit} />
+        <CategoryCommodityInput currentWeek={currentWeek} onSubmit={handleSubmit} />
       )}
 
       {isRefreshing && 
@@ -316,25 +441,16 @@ const onRefresh = useCallback(async () => {
       </View>
       </View>
       }
+ {!showCategoryCommodityInput && (
+        <CommodityPriceList data={reversedSrp} />
+      )}
 
-      <FlatList
-        data={srp || []}
-        renderItem={({ item }) => <CommodityPriceList data={item} />}
-        keyExtractor={(item, index) => index.toString()}
-        ListEmptyComponent={ 
-          <View style={styles.emptyContainer}>
-          <View style={styles.emptyContent}>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
-        </View>
-        }
-        scrollEnabled={false} // Disable internal scrolling
-        numColumns={1} // Set the number of columns
-      />
+
+     
     </ScrollView>
       </ImageBackground>
     </View>  
- 
+    </ProtectedRoute>
   );
 };
 

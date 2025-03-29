@@ -10,7 +10,7 @@ import axios from 'axios';
 const ReportScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { messageId } = route.params as { messageId: string };
+  const { messageId, sessions } = route.params as { messageId: string; sessions: any[] };
   const { showAlert } = useAlert();
 
   const [selectedReason, setSelectedReason] = useState('');
